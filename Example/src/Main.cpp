@@ -1,5 +1,5 @@
 #include <MidiParser/MidiParser.h>
 
 int main() {
-    MidiParser parser;
+    MidiParser parser("SpanishFlea.mid");
 }
