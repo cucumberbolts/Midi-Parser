@@ -1,5 +1,5 @@
 #include <MidiParser/MidiParser.h>
 
 int main() {
-    MidiParser parser("SpanishFlea.mid");
+    MidiParser parser("../../Example/assets/mapleleaf7.mid");
 }
