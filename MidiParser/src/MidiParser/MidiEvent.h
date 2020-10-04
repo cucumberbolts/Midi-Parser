@@ -6,7 +6,7 @@ enum class MidiEventType : uint8_t {
     NoteOff = 0x80,
     NoteOn = 0x90,
     PolyAfter = 0xa0,
-    ControlChanges = 0xb0,
+    ControlChange = 0xb0,
     ProgramChange = 0xc0,  // Type of instument
     ChannelAfterTouch = 0xd0,
     PitchBend = 0xe0,

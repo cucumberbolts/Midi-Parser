@@ -118,31 +118,32 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         MidiEvent event(eventType, 0, 0);
 
         switch (eventType) {
+            // These have 1 byte of data
             case MidiEventType::ProgramChange:
             case MidiEventType::ChannelAfterTouch:
             {
-                event.DataA = ReadBytes<uint8_t>();
-                track.AddEvent(event);
+                ReadBytes<>(&event.DataA);
                 break;
             }
+            // These have 2 bytes of data
             case MidiEventType::NoteOff:
             case MidiEventType::NoteOn:
             case MidiEventType::PolyAfter:
-            case MidiEventType::ControlChanges:
+            case MidiEventType::ControlChange:
             case MidiEventType::PitchBend:
             {
-                event.DataA = ReadBytes<uint8_t>();
-                event.DataB = ReadBytes<uint8_t>();
-                track.AddEvent(event);
+                ReadBytes(&event.DataA);
+                ReadBytes(&event.DataB);
                 break;
             }
             default:
             {
                 std::cout << "Error parsing MIDI events! ";
-                std::cout << "Event type: " << (uint32_t)eventType << "\n";
+                std::cout << "Event type: " << std::hex << (uint32_t)eventType << "\n";
                 return MidiEventStatus::Error;
             }
         }
+        track.AddEvent(event);
 
         return MidiEventStatus::Success;
     }
