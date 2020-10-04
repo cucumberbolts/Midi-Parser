@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 enum class MidiEventType : uint8_t {
     NoteOff = 0x80,
     NoteOn = 0x90,
@@ -8,11 +10,11 @@ enum class MidiEventType : uint8_t {
     ProgramChange = 0xc0,  // Type of instument
     ChannelAfterTouch = 0xd0,
     PitchBend = 0xe0,
-    //Meta = 0xff,
-    //SysEx = 0xf0,
+    Meta = 0xff,
+    SysEx = 0xf0,
 
     //SongPos = 0xf2,
-    ////EndSysEx = 0xf7,
+    EndSysEx = 0xf7,
     //Clock = 0xf8,
     //Start = 0xfa,
     //Continue = 0xfb,
@@ -82,7 +84,7 @@ enum class MetaEventType : uint8_t {
     EndOfTrack = 0x2f,
     Tempo = 0x51,
     TimeSignature = 0x58,
-    KeySignature = 0x59,
+    KeySignature = 0x59
 };
 
 struct MidiEvent {
@@ -90,10 +92,10 @@ struct MidiEvent {
     uint8_t DataA;
     uint8_t DataB;
 
-    MidiEvent(MidiEventType type, uint8_t dataA, uint8_t dataB, uint8_t channel = 0)
+    MidiEvent(MidiEventType type, uint8_t dataA, uint8_t dataB)
         : Type(type), DataA(dataA), DataB(dataB) {}
 
-    void SetValues(MidiEventType type, uint8_t dataA, uint8_t dataB, uint8_t channel) {
+    void SetValues(MidiEventType type, uint8_t dataA, uint8_t dataB) {
         Type = type;
         DataA = dataA;
         DataB = dataB;

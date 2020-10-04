@@ -3,8 +3,11 @@
 
 #include <iostream>
 
-MidiParser::MidiParser(const std::string& file) {
-    if (!Open(file))
+#define MThd 0x4d546864  // The string "MThd" in hexadecimal
+#define MTrk 0x4d54726b  // The string "MTrk" in hexadecimal
+
+MidiParser::MidiParser(const std::string& file, Mode mode) {
+    if (!Open(file, mode))
         std::cout << "Failed!\n";
 }
 
@@ -12,15 +15,20 @@ MidiParser::~MidiParser() {
     m_Stream.close();
 }
 
-bool MidiParser::Open(const std::string& file) {
-    m_Stream.open(file, std::ios_base::binary | std::ios_base::in);
+bool MidiParser::Open(const std::string& file, Mode mode) {
+    if (mode == Mode::Read) {
+        m_Stream.open(file, std::ios_base::binary | std::ios_base::in);
 
-    if (!m_Stream) {
-        std::cout << "could not open file!\n";
+        if (!m_Stream) {
+            std::cout << "Could not open file!\n";
+            return false;
+        }
+
+        ReadFile();
+    } else {
+        std::cout << "Writing not availible yet :(\n";
         return false;
     }
-
-    ReadFile();
 
     return true;
 }
@@ -29,17 +37,14 @@ bool MidiParser::ReadFile() {
     // The following section parses the MIDI header
     bool validHeader = true;
 
-    if (ReadBytes<uint32_t>() != 0x4d546864)
+    if (ReadBytes<uint32_t>() != MThd)
         validHeader = false;
     if (ReadBytes<uint32_t>() != 6)
         validHeader = false;
 
     m_Format = ReadBytes<uint16_t>();
-    std::cout << "Format: " << m_Format << std::endl;
     m_TrackCount = ReadBytes<uint16_t>();
-    std::cout << "Track Count: " << m_TrackCount << std::endl;
     m_Division = ReadBytes<uint16_t>();
-    std::cout << "Division: " << m_Division << std::endl;
 
     if (m_Format < 0 || m_Format > 2)
         validHeader = false;
@@ -71,19 +76,18 @@ bool MidiParser::ReadFile() {
 }
 
 bool MidiParser::ReadTrack() {
-    if (ReadBytes<uint32_t>() != 0x4D54726B) {
+    if (ReadBytes<uint32_t>() != MTrk) {
         std::cout << "Invalid track!\n";
         return false;
     }
 
     uint32_t trackSize = ReadBytes<uint32_t>();  // Size of track chunk in bytes
-
-    std::cout << "Track size: " << trackSize << std::endl;
+    MidiTrack& track = AddTrack();
+    track.m_Size = trackSize;
 
     MidiEventStatus status = MidiEventStatus::Success;
-    while (status == MidiEventStatus::Success) {
-        status = ReadEvent();
-    }
+    while (status == MidiEventStatus::Success)
+        status = ReadEvent(track);
 
     if (status == MidiEventStatus::Error) {
         std::cout << "Error parsing the midi file!\n";
@@ -93,46 +97,32 @@ bool MidiParser::ReadTrack() {
     return true;
 }
 
-MidiEventStatus MidiParser::ReadEvent() {
-    int deltaTime = ReadVariableLengthValue();
-    std::cout << "deltaTime: " << deltaTime << "\n";
-    uint8_t eventType = ReadBytes<uint8_t>();
-    std::cout << "Event Type: " << std::hex << (int)eventType << "\n";
+MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
+    uint32_t deltaTime = ReadVariableLengthValue();
+    MidiEventType eventType = static_cast<MidiEventType>(ReadBytes<uint8_t>());
 
-    if (eventType == 0xff) {  // Meta event
-        std::cout << "Meta Event! ";
+    if (eventType == MidiEventType::Meta) {  // Meta event
         uint8_t metaType = ReadBytes<uint8_t>();
-        int metaLength = ReadVariableLengthValue();
+        int32_t metaLength = ReadVariableLengthValue();
 
-        if (metaType == (uint8_t)MetaEventType::EndOfTrack) {
-            std::cout << "End of track!\n";
+        if (metaType == (uint8_t)MetaEventType::EndOfTrack)
             return MidiEventStatus::End;
-        }
 
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
-
-        std::cout << "data\n";
-        for (int i = 0; i < metaLength; i++)
-            std::cout << (int)data[i] << "\n";
 
         delete[] data;
 
         return MidiEventStatus::Success;
     } else {  // Midi event
-        std::cout << "Midi Event! ";
+        MidiEvent event(eventType, 0, 0);
 
-        MidiEventType midiEventType = (MidiEventType)eventType;
-
-        MidiEvent event(midiEventType, 0, 0);
-
-        switch (midiEventType) {
+        switch (eventType) {
             case MidiEventType::ProgramChange:
             case MidiEventType::ChannelAfterTouch:
             {
                 event.DataA = ReadBytes<uint8_t>();
-
-                std::cout << (int)event.DataA << "\n\n";
+                track.AddEvent(event);
                 break;
             }
             case MidiEventType::NoteOff:
@@ -143,15 +133,13 @@ MidiEventStatus MidiParser::ReadEvent() {
             {
                 event.DataA = ReadBytes<uint8_t>();
                 event.DataB = ReadBytes<uint8_t>();
-
-                std::cout << (int)event.DataA << " ";
-                std::cout << (int)event.DataB << "\n\n";
+                track.AddEvent(event);
                 break;
             }
             default:
             {
                 std::cout << "Error parsing MIDI events! ";
-                std::cout << "Event type: " << (uint32_t)midiEventType << "\n";
+                std::cout << "Event type: " << (uint32_t)eventType << "\n";
                 return MidiEventStatus::Error;
             }
         }
@@ -162,12 +150,16 @@ MidiEventStatus MidiParser::ReadEvent() {
     return MidiEventStatus::Error;
 }
 
+MidiTrack& MidiParser::AddTrack() {
+    return m_TrackList.emplace_back();
+}
+
 int32_t MidiParser::ReadVariableLengthValue() {
     int32_t value = 0;
 
     for (int i = 0; i < 16; i++) {
-        char byte;
-        m_Stream.read(&byte, 1);  // Read 1 more byte
+        int8_t byte;
+        m_Stream.read((char*)&byte, 1);  // Read 1 more byte
         value += (byte & 0b01111111);  // The left bit isn't data so discard it
         if (!(byte & 0b10000000))  // If the left bit is 0 (that means it's the end of value)
             return value;
