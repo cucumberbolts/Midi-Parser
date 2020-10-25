@@ -65,11 +65,15 @@ private:
     friend class MidiParser;
     std::vector<MidiEvent> m_Events;
     size_t m_Size;
+    uint32_t m_TotalTicks;
 public:
+    MidiTrack() : m_Size(0), m_TotalTicks(0) {}
+
     void AddEvent(MidiEvent event);
 
-    inline size_t Size() { return m_Events.size(); }  // For debugging
-    inline size_t SizeInBytes() { return m_Size; }
+    inline uint32_t TotalTicks() const { return m_TotalTicks; }
+    inline size_t EventCount() const { return m_Events.size(); }
+    inline size_t SizeBytes() const { return m_Size; }
 
     Iterator begin() { return Iterator(m_Events.data()); }
     Iterator end() { return Iterator(m_Events.data() + m_Events.size()); }

@@ -1,6 +1,10 @@
+project(Main VERSION 1.0)
+
 add_executable(
     Main
-    src/Main.cpp
+    "src/Main.cpp"
 )
+
+set_target_properties(Main PROPERTIES CXX_STANDARD 17)
 
 target_link_libraries(Main PRIVATE MidiParser)

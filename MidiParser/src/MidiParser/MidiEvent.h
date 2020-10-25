@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 enum class MidiEventType : uint8_t {
+    None = 0x00,
     NoteOff = 0x80,
     NoteOn = 0x90,
     PolyAfter = 0xa0,
@@ -12,14 +13,7 @@ enum class MidiEventType : uint8_t {
     PitchBend = 0xe0,
     Meta = 0xff,
     SysEx = 0xf0,
-
-    //SongPos = 0xf2,
-    EndSysEx = 0xf7,
-    //Clock = 0xf8,
-    //Start = 0xfa,
-    //Continue = 0xfb,
-    //Stop = 0xfc,
-    //ActiveSense = 0xfe
+    EndSysEx = 0xf7
 };
 
 enum class ControlChange : uint8_t {
@@ -73,12 +67,7 @@ enum class MetaEventType : uint8_t {
     CuePoint = 0x07,
     ProgramName = 0x08,
     DeviceName = 0x09,
-    TrackComment = 0xf,
-    //Title = 0x10,      // mscore extension
-    //Subtitle = 0x11,      // mscore extension
-    //Conposer = 0x12,    // mscore extension
-    //Translator = 0x13,    // mscore extension
-    //Poet = 0x14,    // mscore extension
+    TrackComment = 0xf0,
     PortChange = 0x21,
     ChannelPrefix = 0x22,
     EndOfTrack = 0x2f,
@@ -92,12 +81,9 @@ struct MidiEvent {
     uint8_t DataA;
     uint8_t DataB;
 
+    MidiEvent(MidiEventType type)
+        : Type(type), DataA(0), DataB(0) {}
+
     MidiEvent(MidiEventType type, uint8_t dataA, uint8_t dataB)
         : Type(type), DataA(dataA), DataB(dataB) {}
-
-    void SetValues(MidiEventType type, uint8_t dataA, uint8_t dataB) {
-        Type = type;
-        DataA = dataA;
-        DataB = dataB;
-    }
 };

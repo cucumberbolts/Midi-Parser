@@ -3,13 +3,10 @@
 #include <iostream>
 
 int main() {
-    MidiParser reader("../../Example/assets/vultureville.mid", MidiParser::Mode::Read);
-
-    std::cout << reader.GetTrackCount() << std::endl;
+    MidiParser reader("../../Example/assets/maRIO_TheME.mid");
 
     std::cout << std::hex;
-    for (MidiTrack track : reader)
-        for (MidiEvent event : track)
-            std::cout << (int)event.Type << " " << (int)event.DataA << " " << (int)event.DataB << "\n";
-    std::cout << std::dec;
+    for (auto track : reader)
+        for (auto event : track)
+            std::cout << "Midi event: (" << (int)event.Type << ") " << (int)event.DataA << " " << (int)event.DataB << "\n";
 }
