@@ -8,6 +8,8 @@ add_library(
     "src/MidiParser/MidiTrack.cpp"
     "src/MidiParser/MidiEvent.h"
     "src/MidiParser/Instruments.h"
+
+    "src/MidiUtilities/MidiUtilities.h"
 )
 
 set_target_properties(MidiParser PROPERTIES CXX_STANDARD 17)

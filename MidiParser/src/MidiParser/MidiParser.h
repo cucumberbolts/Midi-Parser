@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fstream>
+#include <unordered_map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -66,8 +67,11 @@ public:
     using Iterator = TrackIterator;
 private:
     std::fstream m_Stream;
-    uint16_t m_Format, m_TrackCount, m_Division;
     std::vector<MidiTrack> m_TrackList;
+    std::unordered_map<uint32_t, uint32_t> m_TempoMap;
+
+    uint16_t m_Format, m_TrackCount, m_Division = 0;
+    uint32_t m_TotalTicks = 0;  // Duration of MIDI file in ticks
 
     MidiEventType m_RunningStatus = MidiEventType::None;  // Current running status
 public:
@@ -77,10 +81,11 @@ public:
     ~MidiParser();
 
     bool Open(const std::string& file);
+    void Close();  // Closes m_Stream
 
-    inline uint16_t GetFormat() { return m_Format; }
-    inline uint16_t GetDivision() { return m_Division; }
-    inline uint16_t GetTrackCount() { return m_TrackCount; }
+    inline uint16_t GetFormat() const { return m_Format; }
+    inline uint16_t GetDivision() const { return m_Division; }
+    inline uint16_t GetTrackCount() const { return m_TrackCount; }
 
     uint32_t GetDurationSeconds();
     std::pair<uint32_t, uint32_t> GetDuration();
@@ -96,12 +101,15 @@ private:
         End
     };
 private:
+    void Reset();  // Resets values to default
+
     bool ReadFile();
     bool ReadTrack();
-    MidiEventStatus ReadEvent(MidiTrack& track);
-    int32_t ReadVariableLengthValue();  // Return -1 if invalid
+    MidiEventStatus ReadEvent(MidiTrack& track);  // Reads a single event
 
     MidiTrack& AddTrack();
+
+    int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 
     // Reads type T from file and converts to big endian
     template<typename T>

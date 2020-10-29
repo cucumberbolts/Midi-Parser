@@ -64,8 +64,8 @@ public:
 private:
     friend class MidiParser;
     std::vector<MidiEvent> m_Events;
-    size_t m_Size;
-    uint32_t m_TotalTicks;
+    size_t m_Size;  // Size in bytes
+    uint32_t m_TotalTicks;  // Amount of ticks the track lasts for
 public:
     MidiTrack() : m_Size(0), m_TotalTicks(0) {}
 

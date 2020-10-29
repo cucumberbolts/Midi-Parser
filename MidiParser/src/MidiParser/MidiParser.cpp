@@ -1,18 +1,20 @@
 #include "MidiParser.h"
 #include "MidiEvent.h"
 
+#include <algorithm>
 #include <iostream>
+#include <iterator>
 
 #define MThd 0x4d546864  // The string "MThd" in hexadecimal
 #define MTrk 0x4d54726b  // The string "MTrk" in hexadecimal
+#define HEADER_SIZE 6    // The size of the MIDI header
 
 MidiParser::MidiParser(const std::string& file) {
-    if (!Open(file))
-        std::cout << "Failed!\n";
+    Open(file);
 }
 
 MidiParser::~MidiParser() {
-    m_Stream.close();
+    Close();
 }
 
 bool MidiParser::Open(const std::string& file) {
@@ -23,13 +25,41 @@ bool MidiParser::Open(const std::string& file) {
         return false;
     }
 
+    Reset();
+
     ReadFile();
 
+    Close();
     return true;
 }
 
+void MidiParser::Close() {
+    m_Stream.close();
+}
+
 uint32_t MidiParser::GetDurationSeconds() {
-    return 1;
+    uint64_t microseconds = 0;
+
+    // Default is 60 bpm if no tempo is specified
+    if (m_TempoMap.empty()) {
+        m_TempoMap[0] = 1000000;
+        return m_TotalTicks / m_Division * 1000000;
+    }
+
+    for (auto it = m_TempoMap.begin(); it != m_TempoMap.end(); it++) {
+        auto nextTempo = std::find_if(m_TempoMap.begin(), m_TempoMap.end(),
+            [tick = it->first](const std::pair<uint32_t, uint32_t>& x) -> bool {
+                return x.first > tick;
+            }
+        );
+        uint32_t nextTick = (nextTempo == m_TempoMap.end() ? m_TotalTicks : nextTempo->first);
+
+        uint32_t ticks = nextTick - it->first;
+        uint32_t quarterNotes = ticks / m_Division;
+        microseconds += (uint64_t)quarterNotes * it->second;
+    }
+
+    return microseconds * 0.000001;
 }
 
 std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
@@ -39,28 +69,27 @@ std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
     return { minutes, seconds % 60 };
 }
 
+void MidiParser::Reset() {
+    m_TotalTicks = 0;
+    m_TrackList.clear();
+    m_TempoMap.clear();
+}
+
 bool MidiParser::ReadFile() {
     // The following section parses the MIDI header
-    bool validHeader = true;
-
     if (ReadBytes<uint32_t>() != MThd)
-        validHeader = false;
-    if (ReadBytes<uint32_t>() != 6)
-        validHeader = false;
+        return false;
+    if (ReadBytes<uint32_t>() != HEADER_SIZE)
+        return false;
 
-    m_Format = ReadBytes<uint16_t>();
-    m_TrackCount = ReadBytes<uint16_t>();
-    m_Division = ReadBytes<uint16_t>();
+    ReadBytes(&m_Format);
+    ReadBytes(&m_TrackCount);
+    ReadBytes(&m_Division);
 
     if (m_Format < 0 || m_Format > 2)
-        validHeader = false;
-    if (m_Division == 0)
-        validHeader = false;
-
-    if (!validHeader) {
-        std::cout << "Invalid MIDI header!\n";
         return false;
-    }
+    if (m_Division == 0)
+        return false;
 
     m_TrackList.reserve(m_TrackCount);
 
@@ -94,12 +123,17 @@ bool MidiParser::ReadTrack() {
     track.m_Size = trackSize;
     track.m_Events.reserve(trackSize / sizeof(MidiEvent));  // Reserve an approximate size
 
+    // Reads each event in the track
     MidiEventStatus status = MidiEventStatus::Success;
     while (status == MidiEventStatus::Success)
         status = ReadEvent(track);
 
+    // Sets the duration of the MIDI file in ticks
+    if (track.m_TotalTicks > m_TotalTicks)
+        m_TotalTicks = track.m_TotalTicks;
+
     if (status == MidiEventStatus::Error) {
-        std::cout << "Error parsing the midi file!\n";
+        std::cout << "Error parsing MIDI file!\n";
         return false;
     }
 
@@ -111,14 +145,14 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     MidiEventType eventType = static_cast<MidiEventType>(ReadBytes<uint8_t>());
 
     uint8_t a;
-    if ((int)eventType < 0x80) {  // Put comment here
+    if ((int)eventType < 0x80) {
         if (m_RunningStatus == MidiEventType::None) {
             std::cout << "Error: running status with no previous command! eventType: " << (int)eventType << "\n";
             return MidiEventStatus::Error;
         }
         // Meta (0xff), SysEx (can be 0xf0 or 0xf7)
         if ((int)m_RunningStatus >= 0xf0) {
-            std::cout << "Running status cannot be a meta or sysex event.\n";
+            std::cout << "Error: running status cannot be a meta or sysex event.\n";
             return MidiEventStatus::Error;
         }
 
@@ -144,6 +178,12 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
 
+        if (metaType == MetaEventType::Tempo) {
+            uint32_t tempo;  // Store tempo here
+            tempo = data[2] | (data[1] << 8) | (data[0] << 16); // Convert endian and store in uint32_t
+            m_TempoMap[track.m_TotalTicks] = tempo;
+        }
+
         delete[] data;
 
         return MidiEventStatus::Success;
@@ -158,8 +198,6 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
         MidiEvent event(eventType, a, 0);
 
-        // MidiEventType::ProgramChange and MidiEventType::ChannelAfterTouch
-        // Already read
         switch (eventType) {
             // These have 1 byte of data
             case MidiEventType::ProgramChange:
@@ -201,8 +239,7 @@ int32_t MidiParser::ReadVariableLengthValue() {
     int32_t value = 0;
 
     for (int i = 0; i < 16; i++) {
-        char byte;
-        m_Stream.read(&byte, 1);  // Read 1 more byte
+        uint8_t byte = m_Stream.get(); // Read 1 more byte
         value += (byte & 0b01111111);  // The left bit isn't data so discard it
         if (!(byte & 0b10000000))  // If the left bit is 0 (that means it's the end of value)
             return value;
@@ -217,11 +254,11 @@ T MidiParser::ReadBytes(T* destination) {
     static_assert(std::is_integral<T>(), "Type T is not an integer!");
 
     T number = 0;
-    if (destination == nullptr)
+    if (!destination)
         destination = &number;
 
     if constexpr (sizeof(T) == 1) {
-        m_Stream.read((char*)destination, 1);
+        *destination = m_Stream.get();
     } else {
         uint8_t* numBuff = (uint8_t*)destination;  // Type punning :)
         uint8_t buffer[sizeof(T)];
