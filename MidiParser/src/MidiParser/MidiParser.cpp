@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <iterator>
 
 #define MThd 0x4d546864  // The string "MThd" in hexadecimal
 #define MTrk 0x4d54726b  // The string "MTrk" in hexadecimal
@@ -25,26 +24,21 @@ bool MidiParser::Open(const std::string& file) {
         return false;
     }
 
-    Reset();
+    ResetValues();
 
-    ReadFile();
+    if (!ReadFile())
+        return false;
 
     Close();
     return true;
 }
 
-void MidiParser::Close() {
-    m_Stream.close();
-}
-
 uint32_t MidiParser::GetDurationSeconds() {
-    uint64_t microseconds = 0;
-
     // Default is 60 bpm if no tempo is specified
-    if (m_TempoMap.empty()) {
-        m_TempoMap[0] = 1000000;
-        return m_TotalTicks / m_Division * 1000000;
-    }
+    if (m_TempoMap.empty())
+        return m_TotalTicks / m_Division * 1000000;  // 1000000 ticks per quarter note is 60 bpm
+
+    uint64_t microseconds = 0;
 
     for (auto it = m_TempoMap.begin(); it != m_TempoMap.end(); it++) {
         auto nextTempo = std::find_if(m_TempoMap.begin(), m_TempoMap.end(),
@@ -52,24 +46,24 @@ uint32_t MidiParser::GetDurationSeconds() {
                 return x.first > tick;
             }
         );
+        // If another tempo event exists, use that, otherwise, use total ticks
         uint32_t nextTick = (nextTempo == m_TempoMap.end() ? m_TotalTicks : nextTempo->first);
 
         uint32_t ticks = nextTick - it->first;
-        uint32_t quarterNotes = ticks / m_Division;
-        microseconds += (uint64_t)quarterNotes * it->second;
+        microseconds += TicksToMicroseconds(ticks, it->second);
     }
 
-    return microseconds * 0.000001;
+    return microseconds / 1000000;
 }
 
 std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
-    uint32_t seconds = GetDurationSeconds() + 1;  // Round up
+    uint32_t seconds = GetDurationSeconds();
     uint32_t minutes = (seconds - (seconds % 60)) / 60;
 
     return { minutes, seconds % 60 };
 }
 
-void MidiParser::Reset() {
+void MidiParser::ResetValues() {
     m_TotalTicks = 0;
     m_TrackList.clear();
     m_TempoMap.clear();
@@ -157,7 +151,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         }
 
         a = (uint8_t)eventType;
-        eventType = (MidiEventType)m_RunningStatus;
+        eventType = m_RunningStatus;
     } else {
         m_RunningStatus = eventType;
         if ((eventType != MidiEventType::Meta) && (eventType != MidiEventType::SysEx))
@@ -178,11 +172,9 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
 
-        if (metaType == MetaEventType::Tempo) {
-            uint32_t tempo;  // Store tempo here
-            tempo = data[2] | (data[1] << 8) | (data[0] << 16); // Convert endian and store in uint32_t
-            m_TempoMap[track.m_TotalTicks] = tempo;
-        }
+        if (metaType == MetaEventType::Tempo)
+            // Convert endian and store in uint32_t
+            m_TempoMap[track.m_TotalTicks] = data[2] | (data[1] << 8) | (data[0] << 16);
 
         delete[] data;
 
@@ -192,7 +184,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
         uint8_t data = ReadBytes<uint8_t>();
         while (data != (uint8_t)MidiEventType::EndSysEx)
-            data = ReadBytes<uint8_t>();
+            ReadBytes<uint8_t>(&data);
     } else {  // Midi event
         m_RunningStatus = eventType;
 
@@ -254,19 +246,17 @@ T MidiParser::ReadBytes(T* destination) {
     static_assert(std::is_integral<T>(), "Type T is not an integer!");
 
     T number = 0;
-    if (!destination)
+    if (destination == nullptr)
         destination = &number;
 
     if constexpr (sizeof(T) == 1) {
         *destination = m_Stream.get();
     } else {
-        uint8_t* numBuff = (uint8_t*)destination;  // Type punning :)
         uint8_t buffer[sizeof(T)];
-
         m_Stream.read((char*)buffer, sizeof(T));
 
         for (int i = 0; i < sizeof(T); i++)
-            numBuff[i] = buffer[sizeof(T) - 1 - i];
+            *destination += buffer[sizeof(T) - 1 - i] << (i * 8);
     }
     return *destination;
 }
