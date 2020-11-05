@@ -4,11 +4,24 @@
 #include <algorithm>
 #include <iostream>
 
+#include <fmt/core.h>
+
 #define MThd 0x4d546864  // The string "MThd" in hexadecimal
 #define MTrk 0x4d54726b  // The string "MTrk" in hexadecimal
-#define HEADER_SIZE 6    // The size of the MIDI header
+#define HEADER_SIZE 6    // The size of the MIDI header (always 6)
+
+#define BIND_ERROR_FN(fn) [this](const std::string& msg) { this->fn(msg); }
+
+#define VERIFY(x, msg) if (!x) { CallError(msg); }
+#define ERROR(msg) CallError(msg);
 
 MidiParser::MidiParser(const std::string& file) {
+    m_ErrorCallback = BIND_ERROR_FN(DefaultErrorCallback);
+    Open(file);
+}
+
+MidiParser::MidiParser(const std::string& file, ErrorCallbackFunc callback)
+    : m_ErrorCallback(callback) {
     Open(file);
 }
 
@@ -19,18 +32,16 @@ MidiParser::~MidiParser() {
 bool MidiParser::Open(const std::string& file) {
     m_Stream.open(file, std::ios_base::binary | std::ios_base::in);
 
-    if (!m_Stream) {
-        std::cout << "Could not open file!\n";
-        return false;
-    }
+    VERIFY(m_Stream, fmt::format("Could not open file {}!", file));
 
-    ResetValues();
+    m_TotalTicks = 0;
+    m_TrackList.clear();
+    m_TempoMap.clear();
 
-    if (!ReadFile())
-        return false;
+    VERIFY(ReadFile(), fmt::format("Failed to read file {}!", file));
 
     Close();
-    return true;
+    return m_ErrorStatus;
 }
 
 uint32_t MidiParser::GetDurationSeconds() {
@@ -63,27 +74,17 @@ std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
     return { minutes, seconds % 60 };
 }
 
-void MidiParser::ResetValues() {
-    m_TotalTicks = 0;
-    m_TrackList.clear();
-    m_TempoMap.clear();
-}
-
 bool MidiParser::ReadFile() {
     // The following section parses the MIDI header
-    if (ReadBytes<uint32_t>() != MThd)
-        return false;
-    if (ReadBytes<uint32_t>() != HEADER_SIZE)
-        return false;
+    VERIFY((ReadBytes<uint32_t>() == MThd), "Invalid MIDI header");
+    VERIFY((ReadBytes<uint32_t>() == HEADER_SIZE), "Invalid MIDI header");
 
     ReadBytes(&m_Format);
     ReadBytes(&m_TrackCount);
     ReadBytes(&m_Division);
 
-    if (m_Format < 0 || m_Format > 2)
-        return false;
-    if (m_Division == 0)
-        return false;
+    VERIFY((m_Format > 0 && m_Format < 2), "Invalid MIDI header");
+    VERIFY((m_Division != 0), "Invalid MIDI header");
 
     m_TrackList.reserve(m_TrackCount);
 
@@ -92,30 +93,24 @@ bool MidiParser::ReadFile() {
         case 1:
         {
             for (int i = 0; i < m_TrackCount; i++)
-                if (!ReadTrack())
-                    return false;
+                VERIFY(ReadTrack(), "Failed to read track!");
             break;
         }
         default:
         {
-            std::cout << "MIDI format not supported yet!\n";
-            return false;
+            ERROR("MIDI format not supported yet!");
         }
     }
 
-    return true;
+    return m_ErrorStatus;
 }
 
 bool MidiParser::ReadTrack() {
-    if (ReadBytes<uint32_t>() != MTrk) {
-        std::cout << "Invalid track!\n";
-        return false;
-    }
+    VERIFY((ReadBytes<uint32_t>() == MTrk), "Invalid track");
 
-    uint32_t trackSize = ReadBytes<uint32_t>();  // Size of track chunk in bytes
     MidiTrack& track = AddTrack();
-    track.m_Size = trackSize;
-    track.m_Events.reserve(trackSize / sizeof(MidiEvent));  // Reserve an approximate size
+    track.m_Size = ReadBytes<uint32_t>();  // Size of track chunk in bytes
+    track.m_Events.reserve(track.m_Size / sizeof(MidiEvent));  // Reserve an approximate size
 
     // Reads each event in the track
     MidiEventStatus status = MidiEventStatus::Success;
@@ -126,12 +121,7 @@ bool MidiParser::ReadTrack() {
     if (track.m_TotalTicks > m_TotalTicks)
         m_TotalTicks = track.m_TotalTicks;
 
-    if (status == MidiEventStatus::Error) {
-        std::cout << "Error parsing MIDI file!\n";
-        return false;
-    }
-
-    return true;
+    return m_ErrorStatus;
 }
 
 MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
@@ -140,15 +130,9 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
     uint8_t a;
     if ((int)eventType < 0x80) {
-        if (m_RunningStatus == MidiEventType::None) {
-            std::cout << "Error: running status with no previous command! eventType: " << (int)eventType << "\n";
-            return MidiEventStatus::Error;
-        }
+        VERIFY((m_RunningStatus != MidiEventType::None), fmt::format("Running status set to nothing. eventType: {:x}", eventType));
         // Meta (0xff), SysEx (can be 0xf0 or 0xf7)
-        if ((int)m_RunningStatus >= 0xf0) {
-            std::cout << "Error: running status cannot be a meta or sysex event.\n";
-            return MidiEventStatus::Error;
-        }
+        VERIFY(((int)m_RunningStatus < 0xf0), "Error: running status cannot be a meta or sysex event");
 
         a = (uint8_t)eventType;
         eventType = m_RunningStatus;
@@ -209,9 +193,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             }
             default:
             {
-                std::cout << std::hex;
-                std::cout << "Error! Unrecognized event type: " << (uint32_t)eventType << "\n";
-                std::cout << std::dec;
+                ERROR(fmt::format("Error! Unrecognized event type: {:x}", eventType));
                 return MidiEventStatus::Error;
             }
         }
@@ -221,10 +203,6 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     }
 
     return MidiEventStatus::Error;
-}
-
-MidiTrack& MidiParser::AddTrack() {
-    return m_TrackList.emplace_back();
 }
 
 int32_t MidiParser::ReadVariableLengthValue() {
@@ -238,6 +216,7 @@ int32_t MidiParser::ReadVariableLengthValue() {
         value <<= 7;  // Shift 7 because the left bit isn't data
     }
 
+    ERROR("Error reading variable length value");
     return -1;
 }
 
@@ -263,4 +242,13 @@ T MidiParser::ReadBytes(T* destination) {
 
 void MidiParser::ReadBytes(const void* buffer, size_t size) {
     m_Stream.read((char*)buffer, size);
+}
+
+void MidiParser::CallError(const std::string& msg) {
+    m_ErrorCallback(msg);
+    m_ErrorStatus = false;
+}
+
+void MidiParser::DefaultErrorCallback(const std::string& msg) {
+    std::cout << msg << "\n";
 }

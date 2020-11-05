@@ -1,0 +1,3 @@
+[submodule ".\\MidiParser\\vendor\\fmt"]
+	path = .\\MidiParser\\vendor\\fmt
+	url = https://github.com/fmtlib/fmt.git

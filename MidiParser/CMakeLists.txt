@@ -14,9 +14,17 @@ add_library(
 
 set_target_properties(MidiParser PROPERTIES CXX_STANDARD 17)
 
+add_subdirectory(vendor/fmt)
+target_link_libraries(MidiParser PRIVATE fmt)
+
+target_include_directories(
+    MidiParser
+    PRIVATE
+    "vendor/fmt/include"
+)
+
 target_include_directories(
     MidiParser
     PUBLIC
     "src/"
 )
-

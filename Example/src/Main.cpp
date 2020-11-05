@@ -1,8 +1,6 @@
 #include <MidiParser/MidiParser.h>
-#include <MidiUtilities/MidiUtilities.h>
 
 #include <iostream>
-#include <iterator>
 #include <chrono>
 
 static uint32_t s_AllocCount;
@@ -34,8 +32,12 @@ public:
     }
 };
 
+void ErrorCallback(const std::string& msg) {
+    std::cout << msg << "\n";
+}
+
 int main() {
-    MidiParser reader;
+    MidiParser reader(ErrorCallback);
     {
         Timer timer;
         reader.Open("../../Example/assets/SpanishFlea.mid");
