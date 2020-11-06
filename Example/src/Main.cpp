@@ -4,6 +4,7 @@
 #include <chrono>
 
 static uint32_t s_AllocCount;
+
 void* operator new(size_t size) {
     s_AllocCount++;
     return malloc(size);
@@ -33,18 +34,15 @@ public:
 };
 
 void ErrorCallback(const std::string& msg) {
-    std::cout << msg << "\n";
+    std::cout << "Error: " << msg << "\n";
 }
 
 int main() {
     MidiParser reader(ErrorCallback);
-    {
+    for (int i = 0; i < 30; i++) {
         Timer timer;
         reader.Open("../../Example/assets/SpanishFlea.mid");
     }
-
-    auto [minutes, seconds] = reader.GetDuration();
-    std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";
 }

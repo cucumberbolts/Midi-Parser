@@ -2,7 +2,6 @@
 #include "MidiEvent.h"
 
 #include <algorithm>
-#include <iostream>
 
 #include <fmt/core.h>
 
@@ -20,13 +19,8 @@ MidiParser::MidiParser(const std::string& file) {
     Open(file);
 }
 
-MidiParser::MidiParser(const std::string& file, ErrorCallbackFunc callback)
-    : m_ErrorCallback(callback) {
+MidiParser::MidiParser(const std::string& file, ErrorCallbackFunc callback) : m_ErrorCallback(callback) {
     Open(file);
-}
-
-MidiParser::~MidiParser() {
-    Close();
 }
 
 bool MidiParser::Open(const std::string& file) {
@@ -47,7 +41,7 @@ bool MidiParser::Open(const std::string& file) {
 uint32_t MidiParser::GetDurationSeconds() {
     // Default is 60 bpm if no tempo is specified
     if (m_TempoMap.empty())
-        return m_TotalTicks / m_Division * 1000000;  // 1000000 ticks per quarter note is 60 bpm
+        return TicksToMicroseconds(m_TotalTicks, 1000000);  // 1000000 ticks per quarter note is 60 bpm
 
     uint64_t microseconds = 0;
 
@@ -76,24 +70,26 @@ std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
 
 bool MidiParser::ReadFile() {
     // The following section parses the MIDI header
-    VERIFY((ReadBytes<uint32_t>() == MThd), "Invalid MIDI header");
-    VERIFY((ReadBytes<uint32_t>() == HEADER_SIZE), "Invalid MIDI header");
-
+    uint32_t mthd = ReadBytes<uint32_t>();
+    uint32_t headerSize = ReadBytes<uint32_t>();
     ReadBytes(&m_Format);
     ReadBytes(&m_TrackCount);
     ReadBytes(&m_Division);
 
-    VERIFY((m_Format > 0 && m_Format < 2), "Invalid MIDI header");
-    VERIFY((m_Division != 0), "Invalid MIDI header");
+    VERIFY((mthd == MThd), "Invalid MIDI header: Expected string MThd");
+    VERIFY((headerSize == HEADER_SIZE), "Invalid MIDI header: Header size is not 6");
+    VERIFY((m_Format > 0 && m_Format < 3), "Invalid MIDI header: Invalid MIDI format");
+    VERIFY((m_Division != 0), "Invalid MIDI header: Division is 0");
+    VERIFY((m_Division & 0b10000000), "Division mode not supported");
 
-    m_TrackList.reserve(m_TrackCount);
+    m_TrackList.reserve(m_TrackCount);  // Reserves memory
 
     // This parses the tracks
     switch (m_Format) {
         case 1:
         {
             for (int i = 0; i < m_TrackCount; i++)
-                VERIFY(ReadTrack(), "Failed to read track!");
+                ReadTrack();
             break;
         }
         default:
@@ -130,8 +126,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
     uint8_t a;
     if ((int)eventType < 0x80) {
-        VERIFY((m_RunningStatus != MidiEventType::None), fmt::format("Running status set to nothing. eventType: {:x}", eventType));
-        // Meta (0xff), SysEx (can be 0xf0 or 0xf7)
+        VERIFY((m_RunningStatus != MidiEventType::None), fmt::format("Running status set to nothing. Event type: {:x}", eventType));
         VERIFY(((int)m_RunningStatus < 0xf0), "Error: running status cannot be a meta or sysex event");
 
         a = (uint8_t)eventType;
@@ -157,8 +152,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         ReadBytes(data, metaLength);
 
         if (metaType == MetaEventType::Tempo)
-            // Convert endian and store in uint32_t
-            m_TempoMap[track.m_TotalTicks] = data[2] | (data[1] << 8) | (data[0] << 16);
+            m_TempoMap[track.m_TotalTicks] = data[2] | (data[1] << 8) | (data[0] << 16);  // Convert endian
 
         delete[] data;
 
@@ -175,12 +169,6 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         MidiEvent event(eventType, a, 0);
 
         switch (eventType) {
-            // These have 1 byte of data
-            case MidiEventType::ProgramChange:
-            case MidiEventType::ChannelAfterTouch:
-            {
-                break;
-            }
             // These have 2 bytes of data
             case MidiEventType::NoteOff:
             case MidiEventType::NoteOn:
@@ -189,6 +177,12 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             case MidiEventType::PitchBend:
             {
                 ReadBytes(&event.DataB);
+                break;
+            }
+            // These have 1 byte of data
+            case MidiEventType::ProgramChange:
+            case MidiEventType::ChannelAfterTouch:
+            {
                 break;
             }
             default:
@@ -224,9 +218,10 @@ template<typename T>
 T MidiParser::ReadBytes(T* destination) {
     static_assert(std::is_integral<T>(), "Type T is not an integer!");
 
-    T number = 0;
+    T number;
     if (destination == nullptr)
         destination = &number;
+    *destination = 0;
 
     if constexpr (sizeof(T) == 1) {
         *destination = m_Stream.get();
@@ -250,5 +245,5 @@ void MidiParser::CallError(const std::string& msg) {
 }
 
 void MidiParser::DefaultErrorCallback(const std::string& msg) {
-    std::cout << msg << "\n";
+    fmt::print(msg);
 }

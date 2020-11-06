@@ -30,7 +30,7 @@ public:
     MidiParser(const std::string& file);
     MidiParser(const std::string& file, ErrorCallbackFunc callback);
 
-    ~MidiParser();
+    ~MidiParser() = default;
 
     bool Open(const std::string& file);
     inline void Close() { m_Stream.close(); }
