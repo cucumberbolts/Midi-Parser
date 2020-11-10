@@ -1,16 +1,16 @@
-project(MidiParser VERSION 1.0)
+project("MidiParser")
 
-add_library(
-    MidiParser
-    "src/MidiParser/MidiParser.h"
-    "src/MidiParser/MidiParser.cpp"
-    "src/MidiParser/MidiTrack.h"
-    "src/MidiParser/MidiTrack.cpp"
-    "src/MidiParser/MidiEvent.h"
-    "src/MidiParser/Instruments.h"
-
-    "src/MidiUtilities/MidiUtilities.h"
+file(
+    GLOB_RECURSE
+    SOURCES
+    "src/*.cpp"
+    "include/*.h"
+    "include/MidiUtilities/*.h"
 )
+
+add_library(${PROJECT_NAME} ${SOURCES})
+
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/" FILES ${SOURCES})
 
 set_target_properties(MidiParser PROPERTIES CXX_STANDARD 17)
 
@@ -19,12 +19,6 @@ target_link_libraries(MidiParser PRIVATE fmt)
 
 target_include_directories(
     MidiParser
-    PRIVATE
-    "vendor/fmt/include"
-)
-
-target_include_directories(
-    MidiParser
     PUBLIC
-    "src/"
+    "include/"
 )

@@ -1,4 +1,4 @@
-#include <MidiParser/MidiParser.h>
+#include <MidiParser.h>
 
 #include <iostream>
 #include <chrono>
@@ -39,10 +39,13 @@ void ErrorCallback(const std::string& msg) {
 
 int main() {
     MidiParser reader(ErrorCallback);
-    for (int i = 0; i < 30; i++) {
+    {
         Timer timer;
         reader.Open("../../Example/assets/SpanishFlea.mid");
     }
+
+    auto [minutes, seconds] = reader.GetDuration();
+    std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";
 }
