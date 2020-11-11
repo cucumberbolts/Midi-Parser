@@ -1,6 +1,5 @@
 #pragma once
 
-#include <fstream>
 #include <functional>
 #include <unordered_map>
 #include <string>
@@ -8,12 +7,15 @@
 #include <vector>
 
 #include "MidiTrack.h"
+#include "Instruments.h"
 
 class MidiParser {
 public:
     using ErrorCallbackFunc = std::function<void(const std::string&)>;
 private:
-    std::fstream m_Stream;
+    uint8_t* m_Buffer = nullptr;
+    size_t m_Position = 0;
+
     std::vector<MidiTrack> m_TrackList;
     std::unordered_map<uint32_t, uint32_t> m_TempoMap;
 
@@ -33,7 +35,6 @@ public:
     ~MidiParser() = default;
 
     bool Open(const std::string& file);
-    inline void Close() { m_Stream.close(); }
 
     inline uint16_t GetFormat() const { return m_Format; }
     inline uint16_t GetDivision() const { return m_Division; }
@@ -60,10 +61,11 @@ private:
 
     int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 
-    // Reads type T from file and converts to big endian
+    // Reads type T from file and converts to little endian if necessary
     template<typename T>
     T ReadInteger(T* destination = nullptr);
-    inline void ReadBytes(const void* buffer, size_t size);
+    inline void ReadBytes(void* buffer, size_t size);
+    inline uint8_t ReadByte();
 
     inline uint64_t TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
         return (uint32_t)((double)(ticks / m_Division) * tempo);

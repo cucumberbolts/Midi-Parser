@@ -1,17 +1,21 @@
+#include "Endian.h"
 #include "MidiParser.h"
 #include "MidiEvent.h"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 #include <fmt/core.h>
 
-#define MThd 0x4d546864  // The string "MThd" in hexadecimal
-#define MTrk 0x4d54726b  // The string "MTrk" in hexadecimal
-#define HEADER_SIZE 6    // The size of the MIDI header (always 6)
+#define MThd 0x4d546864    // The string "MThd" in hexadecimal
+#define MTrk 0x4d54726b    // The string "MTrk" in hexadecimal
+#define HEADER_SIZE 6      // The size of the MIDI header (always 6)
+#define MIDI_EVENT_SIZE 3  // The size of one MIDI event
 
 #define BIND_ERROR_FN(fn) [this](const std::string& msg) { this->fn(msg); }
 
-#define VERIFY(x, msg) if (!x) { CallError(msg); }
+#define VERIFY(x, msg) if (!(x)) { CallError(msg); }
 #define ERROR(msg) CallError(msg);
 
 MidiParser::MidiParser(const std::string& file) {
@@ -24,17 +28,24 @@ MidiParser::MidiParser(const std::string& file, ErrorCallbackFunc callback) : m_
 }
 
 bool MidiParser::Open(const std::string& file) {
-    m_Stream.open(file, std::ios_base::binary | std::ios_base::in);
+    size_t size = std::filesystem::file_size(file);
+    m_Buffer = new uint8_t[size];
 
-    VERIFY(m_Stream, fmt::format("Could not open file {}!", file));
+    std::fstream input(file, std::ios_base::binary | std::ios_base::in);
+    if (!input) {
+        ERROR(fmt::format("Could not open file {}!", file));
+        return false;
+    }
+    input.read((char*)m_Buffer, size);
+    input.close();
 
-    m_TotalTicks = 0;
+    m_Position = 0;
     m_TrackList.clear();
     m_TempoMap.clear();
 
-    VERIFY(ReadFile(), fmt::format("Failed to read file {}!", file));
+    VERIFY(ReadFile(), fmt::format("Failed to parse file {}!", file));
+    delete[] m_Buffer;
 
-    Close();
     return m_ErrorStatus;
 }
 
@@ -76,37 +87,29 @@ bool MidiParser::ReadFile() {
     ReadInteger(&m_TrackCount);
     ReadInteger(&m_Division);
 
-    VERIFY((mthd == MThd), "Invalid MIDI header: Expected string MThd");
-    VERIFY((headerSize == HEADER_SIZE), "Invalid MIDI header: Header size is not 6");
-    VERIFY((m_Format > 0 && m_Format < 3), "Invalid MIDI header: Invalid MIDI format");
-    VERIFY((m_Division != 0), "Invalid MIDI header: Division is 0");
-    VERIFY((m_Division & 0b10000000), "Division mode not supported");
+    VERIFY(mthd == MThd, "Invalid MIDI header: Expected string \"MThd\"");
+    VERIFY(headerSize == HEADER_SIZE, "Invalid MIDI header: Header size is not 6");
+    VERIFY(m_Format < 3, "Invalid MIDI header: Invalid MIDI format");
+    VERIFY(m_Division != 0, "Invalid MIDI header: Division is 0");
+    VERIFY(m_Division & 0b10000000, "Division mode not supported");
 
     m_TrackList.reserve(m_TrackCount);  // Reserves memory
 
     // This parses the tracks
-    switch (m_Format) {
-        case 1:
-        {
-            for (int i = 0; i < m_TrackCount; i++)
-                ReadTrack();
-            break;
-        }
-        default:
-        {
-            ERROR("MIDI format not supported yet!");
-        }
-    }
+    VERIFY(m_Format != 2, "Type 2 MIDI format unsupported");  // Type 2 MIDI files not supported
+
+    for (int i = 0; i < m_TrackCount; i++)
+        ReadTrack();
 
     return m_ErrorStatus;
 }
 
 bool MidiParser::ReadTrack() {
-    VERIFY((ReadInteger<uint32_t>() == MTrk), "Invalid track");
+    VERIFY((ReadInteger<uint32_t>() == MTrk), "Invalid track, Expected string \"MTrk\"");
 
     MidiTrack& track = AddTrack();
     track.m_Size = ReadInteger<uint32_t>();  // Size of track chunk in bytes
-    track.m_Events.reserve(track.m_Size / sizeof(MidiEvent));  // Reserve an approximate size
+    track.m_Events.reserve(track.m_Size / MIDI_EVENT_SIZE);  // Reserve an approximate size
 
     // Reads each event in the track
     MidiEventStatus status = MidiEventStatus::Success;
@@ -126,8 +129,8 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
     uint8_t a;
     if ((int)eventType < 0x80) {
-        VERIFY((m_RunningStatus != MidiEventType::None), fmt::format("Running status set to nothing. Event type: {:x}", eventType));
-        VERIFY(((int)m_RunningStatus < 0xf0), "Error: running status cannot be a meta or sysex event");
+        VERIFY(m_RunningStatus != MidiEventType::None, fmt::format("Running status set to nothing. Event type: {:x}", eventType));
+        VERIFY((int)m_RunningStatus < 0xf0, "Error: running status cannot be a meta or sysex event");
 
         a = (uint8_t)eventType;
         eventType = m_RunningStatus;
@@ -151,8 +154,8 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
 
-        if (metaType == MetaEventType::Tempo)
-            m_TempoMap[track.m_TotalTicks] = data[2] | (data[1] << 8) | (data[0] << 16);  // Convert endian
+        if (metaType == MetaEventType::Tempo && Endian::Little)
+            m_TempoMap[track.m_TotalTicks] = Endian::FlipEndian(*(uint32_t*)data) >> 8;
 
         delete[] data;
 
@@ -187,7 +190,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             }
             default:
             {
-                ERROR(fmt::format("Error! Unrecognized event type: {:x}", eventType));
+                ERROR(fmt::format("Unrecognized event type: {:x}", eventType));
                 return MidiEventStatus::Error;
             }
         }
@@ -203,7 +206,9 @@ int32_t MidiParser::ReadVariableLengthValue() {
     int32_t value = 0;
 
     for (int i = 0; i < 16; i++) {
-        uint8_t byte = m_Stream.get(); // Read 1 more byte
+        //uint8_t byte; // Read 1 more byte
+        //ReadBytes(&byte, sizeof(uint8_t));
+        uint8_t byte = ReadByte();
         value += (byte & 0b01111111);  // The left bit isn't data so discard it
         if (!(byte & 0b10000000))  // If the left bit is 0 (that means it's the end of value)
             return value;
@@ -223,20 +228,26 @@ T MidiParser::ReadInteger(T* destination) {
         destination = &number;
     *destination = 0;
 
-    if constexpr (sizeof(T) == 1) {
-        *destination = m_Stream.get();
-    } else {
-        uint8_t buffer[sizeof(T)];
-        ReadBytes(buffer, sizeof(T));
+    if constexpr (sizeof(T) == 1)
+        *destination = ReadByte();
+    else
+        ReadBytes(destination, sizeof(T));
 
-        for (int i = 0; i < sizeof(T); i++)
-            *destination += buffer[sizeof(T) - 1 - i] << (i * 8);
-    }
+    if constexpr (Endian::Little)
+        *destination = Endian::FlipEndian(*destination);
+
     return *destination;
 }
 
-void MidiParser::ReadBytes(const void* buffer, size_t size) {
-    m_Stream.read((char*)buffer, size);
+void MidiParser::ReadBytes(void* buffer, size_t size) {
+    memcpy_s(buffer, size, m_Buffer + m_Position, size);
+    m_Position += size;
+}
+
+uint8_t MidiParser::ReadByte() {
+    uint8_t byte = *(m_Buffer + m_Position);
+    ++m_Position;
+    return byte;
 }
 
 void MidiParser::CallError(const std::string& msg) {

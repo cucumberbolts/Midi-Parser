@@ -16,7 +16,7 @@ public:
     void AddEvent(MidiEvent event);
 
     inline uint32_t TotalTicks() const { return m_TotalTicks; }
-    inline size_t EventCount() const { return m_Events.size(); }
+    inline size_t GetEventCount() const { return m_Events.size(); }
     inline size_t SizeBytes() const { return m_Size; }
 
     MidiEvent& operator[](size_t index) { return m_Events[index]; }
