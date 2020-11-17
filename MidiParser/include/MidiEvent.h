@@ -2,7 +2,14 @@
 
 #include <stdint.h>
 
-enum class MidiEventType : uint8_t {
+enum EventCategory : uint8_t {
+    Midi,
+    Meta = 0xff,
+    SysEx = 0xf0,
+    EndSysEx = 0xf7
+};
+
+enum MidiEventType : uint8_t {
     None = 0x00,
     NoteOff = 0x80,
     NoteOn = 0x90,
@@ -10,11 +17,7 @@ enum class MidiEventType : uint8_t {
     ControlChange = 0xb0,
     ProgramChange = 0xc0,  // Type of instument
     ChannelAfterTouch = 0xd0,
-    PitchBend = 0xe0,
-
-    Meta = 0xff,
-    SysEx = 0xf0,
-    EndSysEx = 0xf7
+    PitchBend = 0xe0
 };
 
 enum class ControlChange : uint8_t {
@@ -57,7 +60,7 @@ enum class ControlChange : uint8_t {
     AllNotesOff = 0x7b
 };
 
-enum class MetaEventType : uint8_t {
+enum MetaEventType : uint8_t {
     SequenceNumber = 0x00,
     Text = 0x01,
     Copyright = 0x02,
@@ -80,14 +83,12 @@ enum class MetaEventType : uint8_t {
 class Event {
 public:
     uint32_t Tick;
-    MidiEventType Type;
+    EventCategory Category;
 
-    Event(uint32_t tick, MidiEventType type) : Tick(tick), Type(type) {}
+    Event(uint32_t tick, EventCategory category) : Tick(tick), Category(category) {}
     virtual ~Event() {}
-};
 
-class TempoEvent : public Event {
-
+    virtual uint8_t Type() const = 0;
 };
 
 class MetaEvent : public Event {
@@ -96,25 +97,27 @@ public:
     uint8_t* Data = nullptr;
     uint32_t Size = 0;
 
-    MetaEvent(uint32_t tick, MetaEventType type, uint8_t* data, uint32_t size)
-        : Event(tick, MidiEventType::Meta), MetaType(type), Data(data), Size(size) {}
+    MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, uint32_t size)
+        : Event(tick, EventCategory::Meta), MetaType(metaType), Data(data), Size(size) {}
 
     ~MetaEvent() override {
         delete[] Data;
     }
+
+    uint8_t Type() const override { return MetaType; }
 };
 
 class MidiEvent : public Event {
 public:
+    MidiEventType MidiType;
     uint8_t DataA;
     uint8_t DataB;
 
     uint32_t DurationTicks = 0;  // Duration of this event in ticks (ticks until next event)
     float DurationSeconds = 0.f;
 
-    MidiEvent(MidiEventType type)
-        : Event(0, type), DataA(0), DataB(0) {}
-
     MidiEvent(uint32_t tick, MidiEventType type, uint8_t dataA, uint8_t dataB)
-        : Event(0, type), DataA(dataA), DataB(dataB) {}
+        : Event(0, EventCategory::Midi), MidiType(type), DataA(dataA), DataB(dataB) {}
+
+    uint8_t Type() const override { return MidiType; }
 };

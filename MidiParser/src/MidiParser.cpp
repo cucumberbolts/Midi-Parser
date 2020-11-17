@@ -120,21 +120,11 @@ bool MidiParser::ReadTrack() {
 
 MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     uint32_t deltaTime = ReadVariableLengthValue();
-    MidiEventType eventType = static_cast<MidiEventType>(ReadInteger<uint8_t>());
+    MidiEventType eventType = (MidiEventType)ReadInteger<uint8_t>();
+    EventCategory eventCategory = eventType >= 0xf0 ? (EventCategory)eventType : EventCategory::Midi;
     track.m_TotalTicks += deltaTime;
 
-    uint8_t a;
-    if ((int)eventType < 0x80) {
-        a = (uint8_t)eventType;
-        eventType = m_RunningStatus;
-    } else {
-        if ((eventType != MidiEventType::Meta) && (eventType != MidiEventType::SysEx)) {
-            m_RunningStatus = eventType;
-            ReadInteger(&a);
-        }
-    }
-
-    if (eventType == MidiEventType::Meta) {  // Meta event
+    if (eventCategory == EventCategory::Meta) {  // Meta event
         m_RunningStatus = MidiEventType::None;
 
         MetaEventType metaType = static_cast<MetaEventType>(ReadInteger<uint8_t>());
@@ -153,14 +143,21 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             m_TempoMap[track.m_TotalTicks] = Endian::FlipEndian(*(uint32_t*)metaEvent->Data) >> 8;
 
         return MidiEventStatus::Success;
-    } else if (eventType == MidiEventType::SysEx) {  // Ignore SysEx events
+    } else if (eventCategory == EventCategory::SysEx) {  // Ignore SysEx events
         m_RunningStatus = MidiEventType::None;
 
         uint8_t data = ReadInteger<uint8_t>();
-        while (data != (uint8_t)MidiEventType::EndSysEx)
+        while (data != EventCategory::EndSysEx)
             ReadInteger<uint8_t>(&data);
     } else {  // Midi event
-        m_RunningStatus = eventType;
+        uint8_t a;
+        if (eventType < 0x80) {
+            a = eventType;
+            eventType = m_RunningStatus;
+        } else {
+            m_RunningStatus = eventType;
+            ReadInteger(&a);
+        }
 
         MidiEvent* midiEvent = new MidiEvent(track.m_TotalTicks, eventType, a, 0);
 

@@ -45,25 +45,8 @@ int main() {
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
 
-#if 0
-    std::cout << std::hex;
-    for (int track = 0; track < reader->GetTrackCount(); track++) {
-        std::cout << "Track " << track << ":\n";
-        for (int event = 0; event < (*reader)[track].GetEventCount(); event++) {
-            Event* thing = (*reader)[track][event];
-            if (thing->Type == MidiEventType::Meta) {
-                MetaEvent* metaEvent = static_cast<MetaEvent*>(thing);
-            } else {
-                MidiEvent* midiEvent = static_cast<MidiEvent*>(thing);
-                std::cout << "Note: " << MidiUtilities::ConvertNote(*midiEvent) << "\n";
-            }
-        }
-    }
-    std::cout << std::dec;
-#endif
-
-    //auto [minutes, seconds] = reader->GetDuration();
-    //std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
+    auto [minutes, seconds] = reader->GetDuration();
+    std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";
 }
