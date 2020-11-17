@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "MidiParser/MidiEvent.h"
+#include "MidiEvent.h"
 
 class MidiUtilities {
 private:

@@ -11,6 +11,7 @@ enum class MidiEventType : uint8_t {
     ProgramChange = 0xc0,  // Type of instument
     ChannelAfterTouch = 0xd0,
     PitchBend = 0xe0,
+
     Meta = 0xff,
     SysEx = 0xf0,
     EndSysEx = 0xf7
@@ -76,14 +77,44 @@ enum class MetaEventType : uint8_t {
     KeySignature = 0x59
 };
 
-struct MidiEvent {
+class Event {
+public:
+    uint32_t Tick;
     MidiEventType Type;
+
+    Event(uint32_t tick, MidiEventType type) : Tick(tick), Type(type) {}
+    virtual ~Event() {}
+};
+
+class TempoEvent : public Event {
+
+};
+
+class MetaEvent : public Event {
+public:
+    MetaEventType MetaType;
+    uint8_t* Data = nullptr;
+    uint32_t Size = 0;
+
+    MetaEvent(uint32_t tick, MetaEventType type, uint8_t* data, uint32_t size)
+        : Event(tick, MidiEventType::Meta), MetaType(type), Data(data), Size(size) {}
+
+    ~MetaEvent() override {
+        delete[] Data;
+    }
+};
+
+class MidiEvent : public Event {
+public:
     uint8_t DataA;
     uint8_t DataB;
 
-    MidiEvent(MidiEventType type)
-        : Type(type), DataA(0), DataB(0) {}
+    uint32_t DurationTicks = 0;  // Duration of this event in ticks (ticks until next event)
+    float DurationSeconds = 0.f;
 
-    MidiEvent(MidiEventType type, uint8_t dataA, uint8_t dataB)
-        : Type(type), DataA(dataA), DataB(dataB) {}
+    MidiEvent(MidiEventType type)
+        : Event(0, type), DataA(0), DataB(0) {}
+
+    MidiEvent(uint32_t tick, MidiEventType type, uint8_t dataA, uint8_t dataB)
+        : Event(0, type), DataA(dataA), DataB(dataB) {}
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <unordered_map>
+#include <map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -17,7 +17,7 @@ private:
     size_t m_Position = 0;
 
     std::vector<MidiTrack> m_TrackList;
-    std::unordered_map<uint32_t, uint32_t> m_TempoMap;
+    std::map<uint32_t, uint32_t> m_TempoMap;
 
     uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;
     uint32_t m_TotalTicks = 0;  // Duration of MIDI file in ticks
@@ -42,6 +42,7 @@ public:
 
     uint32_t GetDurationSeconds();
     std::pair<uint32_t, uint32_t> GetDuration();
+    float TicksToSeconds(uint32_t startTick, uint32_t endTick);
 
     MidiTrack& operator[](size_t index) { return m_TrackList[index]; }
 
@@ -65,11 +66,6 @@ private:
     template<typename T>
     T ReadInteger(T* destination = nullptr);
     inline void ReadBytes(void* buffer, size_t size);
-    inline uint8_t ReadByte();
-
-    inline uint64_t TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
-        return (uint32_t)((double)(ticks / m_Division) * tempo);
-    }
 
     inline void CallError(const std::string& msg);
     inline void DefaultErrorCallback(const std::string& msg);

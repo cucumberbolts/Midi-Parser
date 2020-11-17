@@ -18,8 +18,7 @@
 #define VERIFY(x, msg) if (!(x)) { CallError(msg); }
 #define ERROR(msg) CallError(msg);
 
-MidiParser::MidiParser(const std::string& file) {
-    m_ErrorCallback = BIND_ERROR_FN(DefaultErrorCallback);
+MidiParser::MidiParser(const std::string& file) : m_ErrorCallback(BIND_ERROR_FN(DefaultErrorCallback)) {
     Open(file);
 }
 
@@ -51,22 +50,20 @@ bool MidiParser::Open(const std::string& file) {
 
 uint32_t MidiParser::GetDurationSeconds() {
     // Default is 60 bpm if no tempo is specified
-    if (m_TempoMap.empty())
-        return uint32_t(TicksToMicroseconds(m_TotalTicks, 1000000) / 1000000);  // 1000000 ticks per quarter note = 60 bpm
+    if (m_TempoMap.empty()) {
+        m_TempoMap[0] = 1000000;  // 1000000 ticks per quarter note = 60 bpm
+        return m_TotalTicks / m_Division;
+    }
 
     uint64_t microseconds = 0;
-
-    for (auto it = m_TempoMap.begin(); it != m_TempoMap.end(); it++) {
-        auto nextTempo = std::find_if(m_TempoMap.begin(), m_TempoMap.end(),
-            [tick = it->first](const std::pair<uint32_t, uint32_t>& other) -> bool {
-                return other.first > tick;
-            }
-        );
+    for (auto tempo = m_TempoMap.begin(); tempo != m_TempoMap.end(); tempo++) {
+        auto nextTempo = std::next(tempo);
         // If another tempo event exists, use that, otherwise, use total ticks
-        uint32_t nextTick = (nextTempo == m_TempoMap.end() ? m_TotalTicks : nextTempo->first);
-
-        uint32_t ticks = nextTick - it->first;
-        microseconds += TicksToMicroseconds(ticks, it->second);
+        uint32_t nextTempoTick = nextTempo == m_TempoMap.end() ? m_TotalTicks : nextTempo->first;
+        // Number of ticks this tempo lasts for
+        uint32_t ticks = nextTempoTick - tempo->first;
+        // Convert to microseconds
+        microseconds += ticks / m_Division * tempo->second;
     }
 
     return (uint32_t)(microseconds / 1000000);
@@ -96,7 +93,7 @@ bool MidiParser::ReadFile() {
     m_TrackList.reserve(m_TrackCount);  // Reserves memory
 
     // This parses the tracks
-    VERIFY(m_Format != 2, "Type 2 MIDI format unsupported");  // Type 2 MIDI files not supported
+    VERIFY(m_Format != 2, "Type 2 MIDI format not supported");  // Type 2 MIDI files not supported
 
     for (int i = 0; i < m_TrackCount; i++)
         ReadTrack();
@@ -112,9 +109,7 @@ bool MidiParser::ReadTrack() {
     track.m_Events.reserve(track.m_Size / MIDI_EVENT_SIZE);  // Reserve an approximate size
 
     // Reads each event in the track
-    MidiEventStatus status = MidiEventStatus::Success;
-    while (status == MidiEventStatus::Success)
-        status = ReadEvent(track);
+    for (MidiEventStatus s = MidiEventStatus::Success; s == MidiEventStatus::Success; s = ReadEvent(track));
 
     // Sets the duration of the MIDI file in ticks
     if (track.m_TotalTicks > m_TotalTicks)
@@ -126,26 +121,23 @@ bool MidiParser::ReadTrack() {
 MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     uint32_t deltaTime = ReadVariableLengthValue();
     MidiEventType eventType = static_cast<MidiEventType>(ReadInteger<uint8_t>());
+    track.m_TotalTicks += deltaTime;
 
     uint8_t a;
     if ((int)eventType < 0x80) {
-        VERIFY(m_RunningStatus != MidiEventType::None, fmt::format("Running status set to nothing. Event type: {:x}", eventType));
-        VERIFY((int)m_RunningStatus < 0xf0, "Error: running status cannot be a meta or sysex event");
-
         a = (uint8_t)eventType;
         eventType = m_RunningStatus;
     } else {
-        m_RunningStatus = eventType;
-        if ((eventType != MidiEventType::Meta) && (eventType != MidiEventType::SysEx))
+        if ((eventType != MidiEventType::Meta) && (eventType != MidiEventType::SysEx)) {
+            m_RunningStatus = eventType;
             ReadInteger(&a);
+        }
     }
-
-    track.m_TotalTicks += deltaTime;
 
     if (eventType == MidiEventType::Meta) {  // Meta event
         m_RunningStatus = MidiEventType::None;
 
-        MetaEventType metaType = (MetaEventType)ReadInteger<uint8_t>();
+        MetaEventType metaType = static_cast<MetaEventType>(ReadInteger<uint8_t>());
         int32_t metaLength = ReadVariableLengthValue();
 
         if (metaType == MetaEventType::EndOfTrack)
@@ -154,10 +146,11 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
 
-        if (metaType == MetaEventType::Tempo && Endian::Little)
-            m_TempoMap[track.m_TotalTicks] = Endian::FlipEndian(*(uint32_t*)data) >> 8;
+        MetaEvent* metaEvent = new MetaEvent(track.m_TotalTicks, metaType, data, metaLength);
+        track.AddEvent(metaEvent);
 
-        delete[] data;
+        if (metaType == MetaEventType::Tempo && Endian::Little)
+            m_TempoMap[track.m_TotalTicks] = Endian::FlipEndian(*(uint32_t*)metaEvent->Data) >> 8;
 
         return MidiEventStatus::Success;
     } else if (eventType == MidiEventType::SysEx) {  // Ignore SysEx events
@@ -169,7 +162,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     } else {  // Midi event
         m_RunningStatus = eventType;
 
-        MidiEvent event(eventType, a, 0);
+        MidiEvent* midiEvent = new MidiEvent(track.m_TotalTicks, eventType, a, 0);
 
         switch (eventType) {
             // These have 2 bytes of data
@@ -179,7 +172,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             case MidiEventType::ControlChange:
             case MidiEventType::PitchBend:
             {
-                ReadInteger(&event.DataB);
+                ReadInteger(&midiEvent->DataB);
                 break;
             }
             // These have 1 byte of data
@@ -194,7 +187,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
                 return MidiEventStatus::Error;
             }
         }
-        track.AddEvent(event);
+        track.AddEvent(midiEvent);
 
         return MidiEventStatus::Success;
     }
@@ -206,16 +199,14 @@ int32_t MidiParser::ReadVariableLengthValue() {
     int32_t value = 0;
 
     for (int i = 0; i < 16; i++) {
-        //uint8_t byte; // Read 1 more byte
-        //ReadBytes(&byte, sizeof(uint8_t));
-        uint8_t byte = ReadByte();
+        uint8_t byte = ReadInteger<uint8_t>();  // Read 1 more byte
         value += (byte & 0b01111111);  // The left bit isn't data so discard it
         if (!(byte & 0b10000000))  // If the left bit is 0 (that means it's the end of value)
             return value;
         value <<= 7;  // Shift 7 because the left bit isn't data
     }
 
-    ERROR("Error reading variable length value");
+    ERROR("Unable to read variable length value");
     return -1;
 }
 
@@ -228,10 +219,8 @@ T MidiParser::ReadInteger(T* destination) {
         destination = &number;
     *destination = 0;
 
-    if constexpr (sizeof(T) == 1)
-        *destination = ReadByte();
-    else
-        ReadBytes(destination, sizeof(T));
+    *destination = *(T*)(m_Buffer + m_Position);
+    m_Position += sizeof(T);
 
     if constexpr (Endian::Little)
         *destination = Endian::FlipEndian(*destination);
@@ -240,14 +229,19 @@ T MidiParser::ReadInteger(T* destination) {
 }
 
 void MidiParser::ReadBytes(void* buffer, size_t size) {
-    memcpy_s(buffer, size, m_Buffer + m_Position, size);
+    memcpy(buffer, m_Buffer + m_Position, size);
     m_Position += size;
 }
 
-uint8_t MidiParser::ReadByte() {
-    uint8_t byte = *(m_Buffer + m_Position);
-    ++m_Position;
-    return byte;
+float MidiParser::TicksToSeconds(uint32_t startTick, uint32_t endTick) {
+    auto tempo = std::find_if(m_TempoMap.rbegin(), m_TempoMap.rend(),
+        [startTick](const std::pair<uint32_t, uint32_t>& tempo) -> bool {
+            return tempo.first <= startTick;
+        }
+    );
+
+    double microseconds = ((double)(endTick - startTick) / m_Division) * tempo->second;
+    return microseconds / 1000000.f;
 }
 
 void MidiParser::CallError(const std::string& msg) {
