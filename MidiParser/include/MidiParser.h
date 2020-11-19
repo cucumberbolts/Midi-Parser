@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -16,11 +15,12 @@ private:
     uint8_t* m_Buffer = nullptr;
     size_t m_Position = 0;
 
+    std::vector<TempoEvent*> m_TempoList;
     std::vector<MidiTrack> m_TrackList;
-    std::map<uint32_t, uint32_t> m_TempoMap;
 
     uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;
     uint32_t m_TotalTicks = 0;  // Duration of MIDI file in ticks
+    uint64_t m_Duration = 0;  // Duration of MIDI fild in microseconds
 
     MidiEventType m_RunningStatus = MidiEventType::None;  // Current running status
 
@@ -40,9 +40,8 @@ public:
     inline uint16_t GetDivision() const { return m_Division; }
     inline uint16_t GetTrackCount() const { return m_TrackCount; }
 
-    uint32_t GetDurationSeconds();
+    inline uint32_t GetDurationSeconds() { return (uint32_t)(m_Duration / 1000000); }
     std::pair<uint32_t, uint32_t> GetDuration();
-    float TicksToSeconds(uint32_t startTick, uint32_t endTick);
 
     MidiTrack& operator[](size_t index) { return m_TrackList[index]; }
 
@@ -58,13 +57,15 @@ private:
     bool ReadTrack();
     MidiEventStatus ReadEvent(MidiTrack& track);  // Reads a single event
 
-    MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
+    inline MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
+
+    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo) { return ticks / (float)m_Division * tempo; }
 
     int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 
     // Reads type T from file and converts to little endian if necessary
     template<typename T>
-    T ReadInteger(T* destination = nullptr);
+    inline T ReadInteger(T* destination = nullptr);
     inline void ReadBytes(void* buffer, size_t size);
 
     inline void CallError(const std::string& msg);

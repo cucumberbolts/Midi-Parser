@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-enum EventCategory : uint8_t {
+enum class EventCategory : uint8_t {
     Midi,
     Meta = 0xff,
     SysEx = 0xf0,
@@ -107,17 +107,35 @@ public:
     uint8_t Type() const override { return MetaType; }
 };
 
+class TempoEvent : public Event {
+public:
+    uint64_t Time = 0;
+    uint32_t Tempo;
+
+    TempoEvent(uint32_t tick, uint32_t tempo)
+        : Event(tick, EventCategory::Meta), Tempo(tempo) {}
+
+    uint8_t Type() const override { return MetaEventType::Tempo; }
+};
+
 class MidiEvent : public Event {
 public:
     MidiEventType MidiType;
     uint8_t DataA;
     uint8_t DataB;
 
-    uint32_t DurationTicks = 0;  // Duration of this event in ticks (ticks until next event)
-    float DurationSeconds = 0.f;
+    float Start = 0.f;  // Time between beginning of track and beginning of note (seconds)
+    float Duration = 0.f;  // Duration of note in (seconds)
 
     MidiEvent(uint32_t tick, MidiEventType type, uint8_t dataA, uint8_t dataB)
-        : Event(0, EventCategory::Midi), MidiType(type), DataA(dataA), DataB(dataB) {}
+        : Event(tick, EventCategory::Midi), MidiType(type), DataA(dataA), DataB(dataB) {}
 
     uint8_t Type() const override { return MidiType; }
+
+    bool IsMatchingNoteOff(Event* event) {
+        if (Type() == MidiEventType::NoteOn && DataB > 0 && (event->Type() == MidiEventType::NoteOn || event->Type() == MidiEventType::NoteOff))
+            if (((MidiEvent*)event)->DataB == 0)
+                return DataA == ((MidiEvent*)event)->DataA;
+        return false;
+    }
 };

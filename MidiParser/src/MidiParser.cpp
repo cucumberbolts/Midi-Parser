@@ -40,7 +40,7 @@ bool MidiParser::Open(const std::string& file) {
 
     m_Position = 0;
     m_TrackList.clear();
-    m_TempoMap.clear();
+    m_TempoList.clear();
 
     VERIFY(ReadFile(), fmt::format("Failed to parse file {}!", file));
     delete[] m_Buffer;
@@ -48,32 +48,11 @@ bool MidiParser::Open(const std::string& file) {
     return m_ErrorStatus;
 }
 
-uint32_t MidiParser::GetDurationSeconds() {
-    // Default is 60 bpm if no tempo is specified
-    if (m_TempoMap.empty()) {
-        m_TempoMap[0] = 1000000;  // 1000000 ticks per quarter note = 60 bpm
-        return m_TotalTicks / m_Division;
-    }
-
-    uint64_t microseconds = 0;
-    for (auto tempo = m_TempoMap.begin(); tempo != m_TempoMap.end(); tempo++) {
-        auto nextTempo = std::next(tempo);
-        // If another tempo event exists, use that, otherwise, use total ticks
-        uint32_t nextTempoTick = nextTempo == m_TempoMap.end() ? m_TotalTicks : nextTempo->first;
-        // Number of ticks this tempo lasts for
-        uint32_t ticks = nextTempoTick - tempo->first;
-        // Convert to microseconds
-        microseconds += ticks / m_Division * tempo->second;
-    }
-
-    return (uint32_t)(microseconds / 1000000);
-}
-
 std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
     uint32_t seconds = GetDurationSeconds();
     uint32_t minutes = (seconds - (seconds % 60)) / 60;
 
-    return { minutes, seconds % 60 };
+    return std::make_pair(minutes, seconds % 60);
 }
 
 bool MidiParser::ReadFile() {
@@ -98,11 +77,62 @@ bool MidiParser::ReadFile() {
     for (int i = 0; i < m_TrackCount; i++)
         ReadTrack();
 
+    for (int i = 0; i < m_TempoList.size(); i++) {
+        m_TempoList[i]->Time = m_Duration;
+        // If another tempo event exists, use that, otherwise, use total ticks
+        uint32_t nextTempoTick = (i == m_TempoList.size() - 1 ? m_TotalTicks : m_TempoList[i + 1]->Tick);
+        // Number of ticks this tempo lasts for
+        uint32_t ticks = nextTempoTick - m_TempoList[i]->Tick;
+        // Convert to microseconds
+        m_Duration += ticks / m_Division * m_TempoList[i]->Tempo;
+    }
+
+    for (MidiTrack& track : m_TrackList) {
+        for (int i = 0; i < track.m_Events.size(); i++) {
+            if (track.m_Events[i]->Type() != MidiEventType::NoteOn)
+                continue;
+
+            MidiEvent* noteOn = (MidiEvent*)track.m_Events[i];
+            MidiEvent* noteOff = nullptr;
+
+            if (noteOn->DataB == 0)
+                continue;
+
+            for (int j = i + 1; j < track.m_Events.size(); j++) {
+                if (noteOn->IsMatchingNoteOff(track.m_Events[j])) {
+                    noteOff = (MidiEvent*)track.m_Events[j];
+                    break;
+                }
+            }
+
+            VERIFY(noteOff != nullptr, "Could not find the end to note!");
+
+            float start = 0, end = 0;
+            size_t x = 0;
+            for (; x < m_TempoList.size(); ++x) {
+                if ((x == m_TempoList.size() - 1) || (m_TempoList[x + 1]->Tick > noteOn->Tick)) {
+                    uint32_t tick = noteOn->Tick - m_TempoList[x]->Tick;
+                    start = m_TempoList[x]->Time + TicksToMicroseconds(tick, m_TempoList[x]->Tempo);
+                    break;
+                }
+            }
+            for (; x < m_TempoList.size(); ++x) {
+                if ((x == m_TempoList.size() - 1) || (m_TempoList[x + 1]->Tick > noteOff->Tick)) {
+                    uint32_t tick = noteOff->Tick - m_TempoList[x]->Tick;
+                    end = m_TempoList[x]->Time + TicksToMicroseconds(tick, m_TempoList[x]->Tempo);
+                    break;
+                }
+            }
+
+            noteOn->Duration = (end - start) / 1000000.f;
+            noteOn->Start = start / 1000000.f;
+        }
+    }
     return m_ErrorStatus;
 }
 
 bool MidiParser::ReadTrack() {
-    VERIFY((ReadInteger<uint32_t>() == MTrk), "Invalid track, Expected string \"MTrk\"");
+    VERIFY(ReadInteger<uint32_t>() == MTrk, "Invalid track, Expected string \"MTrk\"");
 
     MidiTrack& track = AddTrack();
     track.m_Size = ReadInteger<uint32_t>();  // Size of track chunk in bytes
@@ -136,18 +166,25 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
 
+        if (metaType == MetaEventType::Tempo) {
+            uint32_t tempo = Endian::Little ? Endian::FlipEndian(*(uint32_t*)data) >> 8 : *(uint32_t*)data >> 8;
+            TempoEvent* tempoEvent = new TempoEvent(track.m_TotalTicks, tempo);
+            track.AddEvent(tempoEvent);
+            m_TempoList.push_back(tempoEvent);
+            return MidiEventStatus::Success;
+        }
+
         MetaEvent* metaEvent = new MetaEvent(track.m_TotalTicks, metaType, data, metaLength);
         track.AddEvent(metaEvent);
-
-        if (metaType == MetaEventType::Tempo && Endian::Little)
-            m_TempoMap[track.m_TotalTicks] = Endian::FlipEndian(*(uint32_t*)metaEvent->Data) >> 8;
 
         return MidiEventStatus::Success;
     } else if (eventCategory == EventCategory::SysEx) {  // Ignore SysEx events
         m_RunningStatus = MidiEventType::None;
 
+        fmt::print("SysEx event!\n");
+
         uint8_t data = ReadInteger<uint8_t>();
-        while (data != EventCategory::EndSysEx)
+        while (data != (int)EventCategory::EndSysEx)
             ReadInteger<uint8_t>(&data);
     } else {  // Midi event
         uint8_t a;
@@ -208,13 +245,12 @@ int32_t MidiParser::ReadVariableLengthValue() {
 }
 
 template<typename T>
-T MidiParser::ReadInteger(T* destination) {
+inline T MidiParser::ReadInteger(T* destination) {
     static_assert(std::is_integral<T>(), "Type T is not an integer!");
 
     T number;
     if (destination == nullptr)
         destination = &number;
-    *destination = 0;
 
     *destination = *(T*)(m_Buffer + m_Position);
     m_Position += sizeof(T);
@@ -228,17 +264,6 @@ T MidiParser::ReadInteger(T* destination) {
 void MidiParser::ReadBytes(void* buffer, size_t size) {
     memcpy(buffer, m_Buffer + m_Position, size);
     m_Position += size;
-}
-
-float MidiParser::TicksToSeconds(uint32_t startTick, uint32_t endTick) {
-    auto tempo = std::find_if(m_TempoMap.rbegin(), m_TempoMap.rend(),
-        [startTick](const std::pair<uint32_t, uint32_t>& tempo) -> bool {
-            return tempo.first <= startTick;
-        }
-    );
-
-    double microseconds = ((double)(endTick - startTick) / m_Division) * tempo->second;
-    return microseconds / 1000000.f;
 }
 
 void MidiParser::CallError(const std::string& msg) {
