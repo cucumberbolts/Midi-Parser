@@ -15,7 +15,7 @@ private:
     uint8_t* m_Buffer = nullptr;
     size_t m_Position = 0;
 
-    std::vector<TempoEvent*> m_TempoList;
+    std::vector<TempoEvent> m_TempoList;
     std::vector<MidiTrack> m_TrackList;
 
     uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;
@@ -59,7 +59,9 @@ private:
 
     inline MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
 
-    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo) { return ticks / (float)m_Division * tempo; }
+    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
+        return ticks / (float)m_Division * tempo;
+    }
 
     int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 

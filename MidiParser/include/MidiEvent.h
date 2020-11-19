@@ -132,10 +132,10 @@ public:
 
     uint8_t Type() const override { return MidiType; }
 
-    bool IsMatchingNoteOff(Event* event) {
-        if (Type() == MidiEventType::NoteOn && DataB > 0 && (event->Type() == MidiEventType::NoteOn || event->Type() == MidiEventType::NoteOff))
-            if (((MidiEvent*)event)->DataB == 0)
-                return DataA == ((MidiEvent*)event)->DataA;
+    bool IsMatchingNoteOff(MidiEvent& event) {
+        if (Type() == MidiEventType::NoteOn && DataB > 0 && (event.Type() == MidiEventType::NoteOn || event.Type() == MidiEventType::NoteOff))
+            if (event.DataB == 0)
+                return DataA == event.DataA;
         return false;
     }
 };
