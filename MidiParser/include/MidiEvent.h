@@ -123,6 +123,7 @@ public:
     MidiEventType MidiType;
     uint8_t DataA;
     uint8_t DataB;
+    MidiEvent* NoteOff;
 
     float Start = 0.f;  // Time between beginning of track and beginning of note (seconds)
     float Duration = 0.f;  // Duration of note in (seconds)
@@ -131,11 +132,4 @@ public:
         : Event(tick, EventCategory::Midi), MidiType(type), DataA(dataA), DataB(dataB) {}
 
     uint8_t Type() const override { return MidiType; }
-
-    bool IsMatchingNoteOff(MidiEvent& event) {
-        if (Type() == MidiEventType::NoteOn && DataB > 0 && (event.Type() == MidiEventType::NoteOn || event.Type() == MidiEventType::NoteOff))
-            if (event.DataB == 0)
-                return DataA == event.DataA;
-        return false;
-    }
 };

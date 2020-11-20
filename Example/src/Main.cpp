@@ -5,7 +5,7 @@
 #include <chrono>
 #include <memory>
 
-static uint32_t s_AllocCount;
+static uint32_t s_AllocCount = 0;
 void* operator new(size_t size) {
     s_AllocCount++;
     return malloc(size);
