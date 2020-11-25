@@ -131,5 +131,9 @@ public:
     MidiEvent(uint32_t tick, MidiEventType type, uint8_t dataA, uint8_t dataB)
         : Event(tick, EventCategory::Midi), MidiType(type), DataA(dataA), DataB(dataB) {}
 
-    uint8_t Type() const override { return MidiType; }
+    inline uint8_t Type() const override { return MidiType; }
+
+    inline bool IsNoteOn() {
+        return (MidiType == MidiEventType::NoteOn) && (DataB > 0);
+    }
 };

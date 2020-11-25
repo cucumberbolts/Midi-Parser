@@ -34,18 +34,14 @@ public:
     }
 };
 
-void ErrorCallback(const std::string& msg) {
-    std::cout << "Error: " << msg << "\n";
-}
-
 int main() {
-    std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>(ErrorCallback);
+    std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
     {
         Timer timer;
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
 
-    auto [minutes, seconds] = reader->GetDuration();
+    auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";

@@ -19,5 +19,5 @@ public:
     inline size_t GetEventCount() const { return m_EventList.size(); }
     inline size_t SizeBytes() const { return m_Size; }
 
-    MidiEvent operator[](size_t index) { return m_EventList[index]; }
+    MidiEvent& operator[](size_t index) { return m_EventList[index]; }
 };

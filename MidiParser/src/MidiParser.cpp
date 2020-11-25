@@ -8,23 +8,19 @@
 
 #include <fmt/core.h>
 
-static std::array<MidiEvent*, 127> s_ActiveNotes = { nullptr };  // All the unfinished note on events
-
 #define MThd 0x4d546864    // The string "MThd" in hexadecimal
 #define MTrk 0x4d54726b    // The string "MTrk" in hexadecimal
 #define HEADER_SIZE 6      // The size of the MIDI header (always 6)
-#define MIDI_EVENT_SIZE 3  // The size of one MIDI event
+#define MIDI_EVENT_SIZE 3  // The size of one MIDI event (in the file)
 
 #define BIND_ERROR_FN(fn) [this](const std::string& msg) { this->fn(msg); }
 
-#define VERIFY(x, msg) if (!(x)) { CallError(msg); }
-#define ERROR(msg) CallError(msg);
+#define VERIFY(x, msg) if (!(x)) { Error(msg); }
+#define ERROR(msg) Error(msg);
+
+static std::array<MidiEvent*, 128> s_ActiveNotes = { nullptr };  // All the unfinished note-on events
 
 MidiParser::MidiParser(const std::string& file) : m_ErrorCallback(BIND_ERROR_FN(DefaultErrorCallback)) {
-    Open(file);
-}
-
-MidiParser::MidiParser(const std::string& file, ErrorCallbackFunc callback) : m_ErrorCallback(callback) {
     Open(file);
 }
 
@@ -50,11 +46,8 @@ bool MidiParser::Open(const std::string& file) {
     return m_ErrorStatus;
 }
 
-std::pair<uint32_t, uint32_t> MidiParser::GetDuration() {
-    uint32_t seconds = GetDurationSeconds();
-    uint32_t minutes = (seconds - (seconds % 60)) / 60;
-
-    return std::make_pair(minutes, seconds % 60);
+std::pair<uint32_t, uint32_t> MidiParser::GetDurationMinutesAndSeconds() {
+    return { (uint32_t)(m_Duration / 1000000 / 60), (uint32_t)(m_Duration / 1000000 % 60) };
 }
 
 bool MidiParser::ReadFile() {
@@ -71,11 +64,11 @@ bool MidiParser::ReadFile() {
     VERIFY(m_Division != 0, "Invalid MIDI header: Division is 0");
     VERIFY(m_Division & 0b10000000, "Division mode not supported");
 
+    VERIFY(m_Format != 2, "Type 2 MIDI format not supported");  // Type 2 MIDI files not supported
+
     m_TrackList.reserve(m_TrackCount);  // Reserves memory
 
     // This parses the tracks
-    VERIFY(m_Format != 2, "Type 2 MIDI format not supported");  // Type 2 MIDI files not supported
-
     for (int i = 0; i < m_TrackCount; i++)
         ReadTrack();
 
@@ -91,17 +84,12 @@ bool MidiParser::ReadFile() {
     }
 
     for (MidiTrack& track : m_TrackList) {
-        for (int i = 0; i < track.m_EventList.size(); i++) {
-            MidiEvent* noteOn = &track.m_EventList[i];
-            MidiEvent* noteOff = noteOn->NoteOff;
-
-            if (noteOn->Type() != MidiEventType::NoteOn || noteOn->DataB == 0)
+        for (MidiEvent& event : track.m_EventList) {
+            if (!event.IsNoteOn())
                 continue;
 
-            if (noteOff == nullptr) {
-                ERROR("Could not find the end to note!");
-                return false;
-            }
+            MidiEvent* noteOn = &event;
+            MidiEvent* noteOff = noteOn->NoteOff;
 
             float start = 0, end = 0;
             for (int x = 0; x < m_TempoList.size(); ++x) {
@@ -174,7 +162,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     } else if (eventCategory == EventCategory::SysEx) {  // Ignore SysEx events
         m_RunningStatus = MidiEventType::None;
 
-        fmt::print("Warning: SysEx event!\n");
+        fmt::print("Warning: SysEx event (not supported)!\n");
 
         uint8_t data = ReadInteger<uint8_t>();
         while (data != (int)EventCategory::EndSysEx)
@@ -241,11 +229,11 @@ int32_t MidiParser::ReadVariableLengthValue() {
     int32_t value = 0;
 
     for (int i = 0; i < 16; i++) {
-        uint8_t byte = ReadInteger<uint8_t>();  // Read 1 more byte
-        value += (byte & 0b01111111);  // The left bit isn't data so discard it
-        if (!(byte & 0b10000000))  // If the left bit is 0 (that means it's the end of value)
+        uint8_t byte = ReadInteger<uint8_t>();
+        value += (byte & 0b01111111);
+        if (!(byte & 0b10000000))  // If the left bit is 0 (end of value)
             return value;
-        value <<= 7;  // Shift 7 because the left bit isn't data
+        value <<= 7;
     }
 
     ERROR("Unable to read variable length value");
@@ -253,7 +241,7 @@ int32_t MidiParser::ReadVariableLengthValue() {
 }
 
 template<typename T>
-inline T MidiParser::ReadInteger(T* destination) {
+T MidiParser::ReadInteger(T* destination) {
     static_assert(std::is_integral<T>(), "Type T is not an integer!");
 
     T number;
@@ -274,7 +262,11 @@ void MidiParser::ReadBytes(void* buffer, size_t size) {
     m_Position += size;
 }
 
-void MidiParser::CallError(const std::string& msg) {
+inline float MidiParser::TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
+    return ticks / (float)m_Division * tempo;
+}
+
+void MidiParser::Error(const std::string& msg) {
     m_ErrorCallback(msg);
     m_ErrorStatus = false;
 }

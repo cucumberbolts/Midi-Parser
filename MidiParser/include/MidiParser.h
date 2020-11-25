@@ -28,9 +28,7 @@ private:
     bool m_ErrorStatus = true;  // True if no error
 public:
     MidiParser() = default;
-    MidiParser(ErrorCallbackFunc callback) : m_ErrorCallback(callback) {}
     MidiParser(const std::string& file);
-    MidiParser(const std::string& file, ErrorCallbackFunc callback);
 
     ~MidiParser() = default;
 
@@ -41,7 +39,7 @@ public:
     inline uint16_t GetTrackCount() const { return m_TrackCount; }
 
     inline uint32_t GetDurationSeconds() { return (uint32_t)(m_Duration / 1000000); }
-    std::pair<uint32_t, uint32_t> GetDuration();
+    std::pair<uint32_t, uint32_t> GetDurationMinutesAndSeconds();
 
     MidiTrack& operator[](size_t index) { return m_TrackList[index]; }
 
@@ -53,23 +51,22 @@ private:
         End
     };
 private:
+
     bool ReadFile();
     bool ReadTrack();
     MidiEventStatus ReadEvent(MidiTrack& track);  // Reads a single event
 
     inline MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
 
-    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
-        return ticks / (float)m_Division * tempo;
-    }
-
     int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 
     // Reads type T from file and converts to little endian if necessary
     template<typename T>
-    inline T ReadInteger(T* destination = nullptr);
+    T ReadInteger(T* destination = nullptr);
     inline void ReadBytes(void* buffer, size_t size);
 
-    inline void CallError(const std::string& msg);
+    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
+
+    inline void Error(const std::string& msg);
     inline void DefaultErrorCallback(const std::string& msg);
 };
