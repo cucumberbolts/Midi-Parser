@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -9,8 +8,6 @@
 #include "Instruments.h"
 
 class MidiParser {
-public:
-    using ErrorCallbackFunc = std::function<void(const std::string&)>;
 private:
     uint8_t* m_Buffer = nullptr;
     size_t m_Position = 0;
@@ -24,7 +21,6 @@ private:
 
     MidiEventType m_RunningStatus = MidiEventType::None;  // Current running status
 
-    ErrorCallbackFunc m_ErrorCallback;
     bool m_ErrorStatus = true;  // True if no error
 public:
     MidiParser() = default;
@@ -42,8 +38,6 @@ public:
     std::pair<uint32_t, uint32_t> GetDurationMinutesAndSeconds();
 
     MidiTrack& operator[](size_t index) { return m_TrackList[index]; }
-
-    inline void SetErrorCallback(ErrorCallbackFunc callback) { m_ErrorCallback = callback; }
 private:
     enum class MidiEventStatus : int8_t {
         Error,
@@ -51,7 +45,6 @@ private:
         End
     };
 private:
-
     bool ReadFile();
     bool ReadTrack();
     MidiEventStatus ReadEvent(MidiTrack& track);  // Reads a single event
@@ -68,5 +61,4 @@ private:
     inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
 
     inline void Error(const std::string& msg);
-    inline void DefaultErrorCallback(const std::string& msg);
 };

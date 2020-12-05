@@ -1,26 +1,24 @@
-#include "Endian.h"
 #include "MidiParser.h"
+#include "Endian.h"
 #include "MidiEvent.h"
 
 #include <array>
 #include <filesystem>
 #include <fstream>
-
-#include <fmt/core.h>
+#include <iostream>
+#include <sstream>
 
 #define MThd 0x4d546864    // The string "MThd" in hexadecimal
 #define MTrk 0x4d54726b    // The string "MTrk" in hexadecimal
 #define HEADER_SIZE 6      // The size of the MIDI header (always 6)
 #define MIDI_EVENT_SIZE 3  // The size of one MIDI event (in the file)
 
-#define BIND_ERROR_FN(fn) [this](const std::string& msg) { this->fn(msg); }
-
 #define VERIFY(x, msg) if (!(x)) { Error(msg); }
 #define ERROR(msg) Error(msg);
 
 static std::array<MidiEvent*, 128> s_ActiveNotes = { nullptr };  // All the unfinished note-on events
 
-MidiParser::MidiParser(const std::string& file) : m_ErrorCallback(BIND_ERROR_FN(DefaultErrorCallback)) {
+MidiParser::MidiParser(const std::string& file) {
     Open(file);
 }
 
@@ -30,7 +28,9 @@ bool MidiParser::Open(const std::string& file) {
 
     std::fstream input(file, std::ios_base::binary | std::ios_base::in);
     if (!input) {
-        ERROR(fmt::format("Could not open file {}!", file));
+        std::stringstream ss;
+        ss << "Could not open file " << file;
+        ERROR(ss.str());
         return false;
     }
     input.read((char*)m_Buffer, size);
@@ -129,6 +129,9 @@ bool MidiParser::ReadTrack() {
     if (track.m_TotalTicks > m_TotalTicks)
         m_TotalTicks = track.m_TotalTicks;
 
+    for (auto ptr : s_ActiveNotes)
+        VERIFY(ptr == nullptr, "Unmatched event!");
+
     return m_ErrorStatus;
 }
 
@@ -162,13 +165,11 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
     } else if (eventCategory == EventCategory::SysEx) {  // Ignore SysEx events
         m_RunningStatus = MidiEventType::None;
 
-        fmt::print("Warning: SysEx event (not supported)!\n");
-
         uint8_t data = ReadInteger<uint8_t>();
         while (data != (int)EventCategory::EndSysEx)
             ReadInteger<uint8_t>(&data);
     } else {  // Midi event
-        uint8_t a = 0;
+        uint8_t a;
         if (eventType < 0x80) {
             a = eventType;
             eventType = m_RunningStatus;
@@ -214,7 +215,9 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             }
             default:
             {
-                ERROR(fmt::format("Unrecognized event type: {:x}", eventType));
+                std::stringstream ss;
+                ss << "Unrecognized event type: {:x}" << eventType;
+                ERROR(ss.str());
                 return MidiEventStatus::Error;
             }
         }
@@ -267,10 +270,6 @@ inline float MidiParser::TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
 }
 
 void MidiParser::Error(const std::string& msg) {
-    m_ErrorCallback(msg);
+    std::cout << msg << "\n";
     m_ErrorStatus = false;
-}
-
-void MidiParser::DefaultErrorCallback(const std::string& msg) {
-    fmt::print(msg);
 }
