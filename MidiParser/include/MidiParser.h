@@ -10,7 +10,7 @@
 class MidiParser {
 private:
     uint8_t* m_Buffer = nullptr;
-    size_t m_Position = 0;
+    size_t m_ReadPosition = 0;
 
     std::vector<TempoEvent> m_TempoList;
     std::vector<MidiTrack> m_TrackList;
@@ -38,6 +38,15 @@ public:
     std::pair<uint32_t, uint32_t> GetDurationMinutesAndSeconds();
 
     MidiTrack& operator[](size_t index) { return m_TrackList[index]; }
+
+    std::vector<MidiTrack>::iterator begin() { return m_TrackList.begin(); }
+    std::vector<MidiTrack>::iterator end() { return m_TrackList.end(); }
+
+    std::vector<MidiTrack>::reverse_iterator rbegin() { return m_TrackList.rbegin(); }
+    std::vector<MidiTrack>::reverse_iterator rend() { return m_TrackList.rend(); }
+
+    std::vector<MidiTrack>::const_iterator cbegin() { return m_TrackList.cbegin(); }
+    std::vector<MidiTrack>::const_iterator cend() { return m_TrackList.cend(); }
 private:
     enum class MidiEventStatus : int8_t {
         Error,

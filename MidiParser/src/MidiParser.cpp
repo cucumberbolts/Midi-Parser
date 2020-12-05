@@ -36,7 +36,7 @@ bool MidiParser::Open(const std::string& file) {
     input.read((char*)m_Buffer, size);
     input.close();
 
-    m_Position = 0;
+    m_ReadPosition = 0;
     m_TrackList.clear();
     m_TempoList.clear();
 
@@ -129,8 +129,8 @@ bool MidiParser::ReadTrack() {
     if (track.m_TotalTicks > m_TotalTicks)
         m_TotalTicks = track.m_TotalTicks;
 
-    for (auto ptr : s_ActiveNotes)
-        VERIFY(ptr == nullptr, "Unmatched event!");
+    for (MidiEvent* event : s_ActiveNotes)
+        VERIFY(event == nullptr, "Unmatched event!");
 
     return m_ErrorStatus;
 }
@@ -251,8 +251,8 @@ T MidiParser::ReadInteger(T* destination) {
     if (destination == nullptr)
         destination = &number;
 
-    *destination = *(T*)(m_Buffer + m_Position);
-    m_Position += sizeof(T);
+    *destination = *(T*)(m_Buffer + m_ReadPosition);
+    m_ReadPosition += sizeof(T);
 
     if constexpr (Endian::Little)
         *destination = Endian::FlipEndian(*destination);
@@ -261,8 +261,8 @@ T MidiParser::ReadInteger(T* destination) {
 }
 
 void MidiParser::ReadBytes(void* buffer, size_t size) {
-    memcpy(buffer, m_Buffer + m_Position, size);
-    m_Position += size;
+    memcpy(buffer, m_Buffer + m_ReadPosition, size);
+    m_ReadPosition += size;
 }
 
 inline float MidiParser::TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {

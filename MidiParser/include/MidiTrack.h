@@ -20,4 +20,13 @@ public:
     inline size_t SizeBytes() const { return m_Size; }
 
     MidiEvent& operator[](size_t index) { return m_EventList[index]; }
+
+    std::vector<MidiEvent>::iterator begin() { return m_EventList.begin(); }
+    std::vector<MidiEvent>::iterator end() { return m_EventList.end(); }
+
+    std::vector<MidiEvent>::reverse_iterator rbegin() { return m_EventList.rbegin(); }
+    std::vector<MidiEvent>::reverse_iterator rend() { return m_EventList.rend(); }
+
+    std::vector<MidiEvent>::const_iterator cbegin() { return m_EventList.cbegin(); }
+    std::vector<MidiEvent>::const_iterator cend() { return m_EventList.cend(); }
 };
