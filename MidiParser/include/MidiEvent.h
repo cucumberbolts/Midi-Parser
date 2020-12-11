@@ -82,58 +82,86 @@ enum MetaEventType : uint8_t {
 
 class Event {
 public:
-    uint32_t Tick;
-    EventCategory Category;
-
-    Event(uint32_t tick, EventCategory category) : Tick(tick), Category(category) {}
+    Event(uint32_t tick, EventCategory category)
+        : m_Tick(tick), m_Category(category) {}
     virtual ~Event() {}
 
     virtual uint8_t Type() const = 0;
+
+    virtual inline uint32_t GetTick() const { return m_Tick; }
+    virtual inline EventCategory GetCategory() const { return m_Category; }
+protected:
+    uint32_t m_Tick;
+    EventCategory m_Category;
 };
 
 class MetaEvent : public Event {
 public:
-    MetaEventType MetaType;
-    uint8_t* Data = nullptr;
-    uint32_t Size = 0;
+    friend class MidiParser;
 
-    MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, uint32_t size)
-        : Event(tick, EventCategory::Meta), MetaType(metaType), Data(data), Size(size) {}
+    MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, size_t size)
+        : Event(tick, EventCategory::Meta), m_MetaType(metaType), m_Data(data), Size(size) {}
 
-    ~MetaEvent() override {
-        delete[] Data;
+    virtual ~MetaEvent() override {
+        delete[] m_Data;
     }
 
-    uint8_t Type() const override { return MetaType; }
+    uint8_t Type() const override { return m_MetaType; }
+protected:
+    MetaEventType m_MetaType;
+    uint8_t* m_Data = nullptr;
+    size_t Size = 0;
 };
 
-class TempoEvent : public Event {
+class TempoEvent : public MetaEvent {
 public:
-    uint64_t Time = 0;
-    uint32_t Tempo;
+    friend class MidiParser;
 
     TempoEvent(uint32_t tick, uint32_t tempo)
-        : Event(tick, EventCategory::Meta), Tempo(tempo) {}
+        : MetaEvent(tick, MetaEventType::Tempo, nullptr, 0), m_Tempo(tempo) {}
 
-    uint8_t Type() const override { return MetaEventType::Tempo; }
+    ~TempoEvent() override{
+        delete[] m_Data;
+    }
+
+    inline uint32_t GetTempo() const { return m_Tempo; }
+private:
+    uint64_t m_Time = 0;
+    uint32_t m_Tempo = 0;
 };
 
 class MidiEvent : public Event {
 public:
-    MidiEventType MidiType;
-    uint8_t DataA;
-    uint8_t DataB;
-    MidiEvent* NoteOff;
+    friend class MidiParser;
 
-    float Start = 0.f;  // Time between beginning of track and beginning of note (seconds)
-    float Duration = 0.f;  // Duration of note in (seconds)
+    MidiEvent(uint32_t tick, MidiEventType type, uint8_t channel, uint8_t dataA, uint8_t dataB)
+        : Event(tick, EventCategory::Midi), m_MidiEventType(type), m_Channel(channel), m_DataA(dataA), m_DataB(dataB) {}
 
-    MidiEvent(uint32_t tick, MidiEventType type, uint8_t dataA, uint8_t dataB)
-        : Event(tick, EventCategory::Midi), MidiType(type), DataA(dataA), DataB(dataB) {}
-
-    inline uint8_t Type() const override { return MidiType; }
+    inline uint8_t Type() const override { return m_MidiEventType; }
 
     inline bool IsNoteOn() {
-        return (MidiType == MidiEventType::NoteOn) && (DataB > 0);
+        return (m_MidiEventType == MidiEventType::NoteOn) && (m_DataB > 0);
     }
+
+    inline bool IsNoteOff() {
+        return (m_MidiEventType == MidiEventType::NoteOff) ||
+            ((m_MidiEventType == MidiEventType::NoteOn) && m_DataB == 0);
+    }
+
+    inline MidiEventType GetMidiEventType() const { return m_MidiEventType; }
+    inline uint8_t GetChannel() const { return m_Channel; }
+    inline uint8_t GetDataA() const { return m_DataA; }
+    inline uint8_t GetDataB() const { return m_DataB; }
+
+    inline float GetTimeStamp() const { return m_Start; }
+    inline float GetDuration() const { return m_Duration; }
+protected:
+    MidiEventType m_MidiEventType;
+    uint8_t m_Channel;
+    uint8_t m_DataA;
+    uint8_t m_DataB;
+    MidiEvent* m_NoteOff = nullptr;
+
+    float m_Start = 0.f;  // Time between beginning of track and beginning of note (seconds)
+    float m_Duration = 0.f;  // Duration of note in (seconds)
 };

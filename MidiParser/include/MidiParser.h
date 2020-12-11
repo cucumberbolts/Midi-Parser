@@ -8,20 +8,6 @@
 #include "Instruments.h"
 
 class MidiParser {
-private:
-    uint8_t* m_Buffer = nullptr;
-    size_t m_ReadPosition = 0;
-
-    std::vector<TempoEvent> m_TempoList;
-    std::vector<MidiTrack> m_TrackList;
-
-    uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;
-    uint32_t m_TotalTicks = 0;  // Duration of MIDI file in ticks
-    uint64_t m_Duration = 0;  // Duration of MIDI fild in microseconds
-
-    MidiEventType m_RunningStatus = MidiEventType::None;  // Current running status
-
-    bool m_ErrorStatus = true;  // True if no error
 public:
     MidiParser() = default;
     MidiParser(const std::string& file);
@@ -60,14 +46,30 @@ private:
 
     inline MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
 
-    int32_t ReadVariableLengthValue();  // Returns -1 if invalid
+    inline int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 
     // Reads type T from file and converts to little endian if necessary
     template<typename T>
-    T ReadInteger(T* destination = nullptr);
+    inline T ReadInteger(T* destination = nullptr);
     inline void ReadBytes(void* buffer, size_t size);
 
-    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
+    inline uint64_t TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
+
+    inline uint32_t CalculateTempo(uint8_t* data, size_t size);
 
     inline void Error(const std::string& msg);
+private:
+    uint8_t* m_Buffer = nullptr;
+    size_t m_ReadPosition = 0;
+
+    std::vector<TempoEvent> m_TempoList;
+    std::vector<MidiTrack> m_TrackList;
+
+    uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;
+    uint32_t m_TotalTicks = 0;  // Duration of MIDI file in ticks
+    uint64_t m_Duration = 0;  // Duration of MIDI file in microseconds
+
+    MidiEventType m_RunningStatus = MidiEventType::None;  // Current running status
+
+    bool m_ErrorStatus = true;  // True if no error
 };

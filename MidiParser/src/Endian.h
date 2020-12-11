@@ -5,14 +5,14 @@
 
 class Endian {
 private:
-    static constexpr uint16_t number = 0xAABB;
-    static constexpr uint8_t view = (const uint8_t&)number;
+    static constexpr uint16_t m_Number = 0xAABB;
+    static constexpr uint8_t m_View = (const uint8_t&)m_Number;
 public:
     Endian() = delete;
-    static constexpr bool Little = view == 0xBB;
-    static constexpr bool Big = view == 0xAA;
-    static constexpr bool IsLittleEndian() { return view == 0xBB; }
-    static constexpr bool IsBigEndian() { return view == 0xAA; }
+
+    static constexpr bool Little = (m_View == 0xBB);  // True if computer is little endian
+    static constexpr bool Big = (m_View == 0xAA);  // True if computer is big endian
+
     static_assert(Little || Big, "Cannot determine endianness");
 
     template <typename T>

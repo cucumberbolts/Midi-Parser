@@ -1,11 +1,14 @@
 project("MidiParser")
 
-file(
-    GLOB_RECURSE
-    SOURCES
-    "src/*.cpp"
-    "include/*.h"
-    "include/MidiUtilities/*.h"
+set(SOURCES
+    "src/MidiParser.cpp"
+    "src/MidiTrack.cpp"
+    "src/Endian.h"
+    "include/Instruments.h"
+    "include/MidiEvent.h"
+    "include/MidiParser.h"
+    "include/MidiTrack.h"
+    "include/MidiUtilities/MidiUtilities.h"
 )
 
 add_library(${PROJECT_NAME} ${SOURCES})
