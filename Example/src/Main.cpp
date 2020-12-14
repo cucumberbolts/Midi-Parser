@@ -52,7 +52,7 @@ int main() {
     }
 #endif
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
-    std::cout << std::hex << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
+    std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";
 }

@@ -20,7 +20,7 @@ enum MidiEventType : uint8_t {
     PitchBend = 0xe0
 };
 
-enum class ControlChange : uint8_t {
+enum ControlChange : uint8_t {
     HBANK = 0x00,
     LBANK = 0x20,
 
@@ -100,7 +100,14 @@ public:
     friend class MidiParser;
 
     MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, size_t size)
-        : Event(tick, EventCategory::Meta), m_MetaType(metaType), m_Data(data), Size(size) {}
+        : Event(tick, EventCategory::Meta), m_MetaType(metaType), m_Data(data), m_Size(size) {}
+
+    MetaEvent(const MetaEvent& other)
+        : Event(other.m_Tick, EventCategory::Meta), m_MetaType(other.m_MetaType), m_Size(other.m_Size) {
+
+        m_Data = new uint8_t[m_Size];
+        memcpy(m_Data, other.m_Data, m_Size);
+    }
 
     virtual ~MetaEvent() override {
         delete[] m_Data;
@@ -110,7 +117,7 @@ public:
 protected:
     MetaEventType m_MetaType;
     uint8_t* m_Data = nullptr;
-    size_t Size = 0;
+    size_t m_Size = 0;
 };
 
 class TempoEvent : public MetaEvent {
@@ -125,6 +132,7 @@ public:
     }
 
     inline uint32_t GetTempo() const { return m_Tempo; }
+    inline uint64_t GetTime() const { return m_Time; }
 private:
     uint64_t m_Time = 0;
     uint32_t m_Tempo = 0;

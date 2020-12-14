@@ -45,6 +45,7 @@ private:
     MidiEventStatus ReadEvent(MidiTrack& track);  // Reads a single event
 
     inline MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
+    inline MidiTrack& AddTrack(size_t sizeBytes) { return m_TrackList.emplace_back(sizeBytes); }
 
     inline int32_t ReadVariableLengthValue();  // Returns -1 if invalid
 
@@ -59,7 +60,7 @@ private:
 
     inline void Error(const std::string& msg);
 private:
-    uint8_t* m_Buffer = nullptr;
+    std::vector<uint8_t> m_Data;
     size_t m_ReadPosition = 0;
 
     std::vector<TempoEvent> m_TempoList;
