@@ -44,13 +44,20 @@ int main() {
     std::cout << std::hex;
     for (MidiTrack& track : *reader) {
         std::cout << "----------------------- New track -----------------------\n";
-        for (MidiEvent& event : track) {
-            std::string noteName = MidiUtilities::ConvertNote(event);
-            if (!noteName.empty())
-                std::cout << noteName << "\n";
+        for (int i = 0; i < track.GetEventCount(); i++) {
+            if (track[i]->GetCategory() == EventCategory::Midi) {
+                std::string noteName = MidiUtilities::ConvertNote(*(MidiEvent*)track[i]);
+                if (!noteName.empty())
+                    std::cout << noteName << " " << ((MidiEvent*)track[i])->GetDuration() << "\n";
+            } else if (track[i]->GetCategory() == EventCategory::Meta) {
+                for (int i = 0; i < ((MetaEvent*)track[i])->GetSize(); i++)
+                    std::cout << std::hex << (int)((MetaEvent*)track[i])->Data()[i] << "\n";
+            }
         }
     }
+    std::cout << std::dec;
 #endif
+
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 

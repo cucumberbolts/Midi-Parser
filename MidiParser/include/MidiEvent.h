@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <algorithm>
 
 enum class EventCategory : uint8_t {
     Midi,
@@ -90,6 +90,20 @@ public:
 
     virtual inline uint32_t GetTick() const { return m_Tick; }
     virtual inline EventCategory GetCategory() const { return m_Category; }
+#if 0
+    inline bool IsNoteOn() {
+        if (Type() == MidiEventType::NoteOn)
+            return ((MidiEvent*)this)->m_DataB > 0;
+    }
+
+    inline bool IsNoteOff() {
+        if (Type() == MidiEventType::NoteOff)
+            return true;
+        else if (Type() == MidiEventType::NoteOn)
+            return ((MidiEvent*)this)->m_DataB;
+        return false;
+    }
+#endif
 protected:
     uint32_t m_Tick;
     EventCategory m_Category;
@@ -102,11 +116,11 @@ public:
     MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, size_t size)
         : Event(tick, EventCategory::Meta), m_MetaType(metaType), m_Data(data), m_Size(size) {}
 
-    MetaEvent(const MetaEvent& other)
+    MetaEvent(MetaEvent& other)
         : Event(other.m_Tick, EventCategory::Meta), m_MetaType(other.m_MetaType), m_Size(other.m_Size) {
-
+    
         m_Data = new uint8_t[m_Size];
-        memcpy(m_Data, other.m_Data, m_Size);
+        std::copy(other.m_Data, other.m_Data + other.m_Size, m_Data);
     }
 
     virtual ~MetaEvent() override {
@@ -114,6 +128,8 @@ public:
     }
 
     uint8_t Type() const override { return m_MetaType; }
+    inline size_t GetSize() const { return m_Size; }
+    inline uint8_t* Data() const { return m_Data; }
 protected:
     MetaEventType m_MetaType;
     uint8_t* m_Data = nullptr;
@@ -127,7 +143,7 @@ public:
     TempoEvent(uint32_t tick, uint32_t tempo)
         : MetaEvent(tick, MetaEventType::Tempo, nullptr, 0), m_Tempo(tempo) {}
 
-    ~TempoEvent() override{
+    ~TempoEvent() override {
         delete[] m_Data;
     }
 
@@ -140,21 +156,13 @@ private:
 
 class MidiEvent : public Event {
 public:
+    friend class Event;
     friend class MidiParser;
 
     MidiEvent(uint32_t tick, MidiEventType type, uint8_t channel, uint8_t dataA, uint8_t dataB)
         : Event(tick, EventCategory::Midi), m_MidiEventType(type), m_Channel(channel), m_DataA(dataA), m_DataB(dataB) {}
 
     inline uint8_t Type() const override { return m_MidiEventType; }
-
-    inline bool IsNoteOn() {
-        return (m_MidiEventType == MidiEventType::NoteOn) && (m_DataB > 0);
-    }
-
-    inline bool IsNoteOff() {
-        return (m_MidiEventType == MidiEventType::NoteOff) ||
-            ((m_MidiEventType == MidiEventType::NoteOn) && m_DataB == 0);
-    }
 
     inline MidiEventType GetMidiEventType() const { return m_MidiEventType; }
     inline uint8_t GetChannel() const { return m_Channel; }
@@ -168,7 +176,6 @@ protected:
     uint8_t m_Channel;
     uint8_t m_DataA;
     uint8_t m_DataB;
-    MidiEvent* m_NoteOff = nullptr;
 
     float m_Start = 0.f;  // Time between beginning of track and beginning of note (seconds)
     float m_Duration = 0.f;  // Duration of note in (seconds)
