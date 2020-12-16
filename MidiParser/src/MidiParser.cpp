@@ -80,9 +80,9 @@ bool MidiParser::ReadFile() {
         auto next = std::next(it);
         uint32_t nextTempoTick = (next == m_TempoList.end() ? m_TotalTicks : next->m_Tick);
         uint32_t ticks = nextTempoTick - it->m_Tick;
-        m_Duration += TicksToMicroseconds(ticks, it->m_Tempo);
+        m_Duration += (uint64_t)TicksToMicroseconds(ticks, it->m_Tempo);
     }
-#if 0
+
     // Calculates the note durations
     TempoEvent* tempo = &m_TempoList[0];
 
@@ -93,27 +93,27 @@ bool MidiParser::ReadFile() {
 
             if (track[i]->Type() != MidiEventType::NoteOn)
                 continue;
-            if (((MidiEvent*)track[i])->m_DataB == 0)
-                continue;
 
             MidiEvent* noteOn = (MidiEvent*)track[i];
-            MidiEvent* noteOff = nullptr;
+            MidiEvent* noteOff = noteOn;
 
-            // Lmao what is this
-            for (int x = 1; x < track.GetEventCount(); x++)
-                if (track[x]->GetCategory() == EventCategory::Midi)
-                    if (track[x]->Type() == MidiEventType::NoteOff || ((MidiEvent*)track[x])->GetDataB() == 0)
-                        if (((MidiEvent*)track[x])->GetDataA() == noteOn->GetDataA())
-                            noteOff = (MidiEvent*)track[x];
+            for (int x = i + 1; x < track.GetEventCount(); x++) {
+                if (track[x]->Type() == MidiEventType::NoteOff) {
+                    if (((MidiEvent*)track[x])->m_DataA == noteOn->m_DataA) {
+                        noteOff = (MidiEvent*)track[x];
+                        break;
+                    }
+                }
+            }
 
-            float start = tempo->GetTime() + TicksToMicroseconds(noteOn->m_Tick - tempo->GetTick(), tempo->GetTempo());
-            float end = tempo->GetTime() + TicksToMicroseconds(noteOff->m_Tick - tempo->GetTick(), tempo->GetTempo());
+            float start = (float)tempo->GetTime() + TicksToMicroseconds(noteOn->m_Tick - tempo->GetTick(), tempo->GetTempo());
+            float end = (float)tempo->GetTime() + TicksToMicroseconds(noteOff->m_Tick - tempo->GetTick(), tempo->GetTempo());
 
             noteOn->m_Duration = (end - start) / 1000000.f;
             noteOn->m_Start = start / 1000000.f;
         }
     }
-#endif
+
     return m_ErrorStatus;
 }
 
@@ -152,8 +152,11 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         uint8_t* data = new uint8_t[metaLength];
         ReadBytes(data, metaLength);
 
-        if (metaType == MetaEventType::Tempo)
+        if (metaType == MetaEventType::Tempo) {
+            track.AddEvent<TempoEvent>(track.m_TotalTicks, CalculateTempo(data, metaLength));
             m_TempoList.emplace_back(track.m_TotalTicks, CalculateTempo(data, metaLength));
+            return MidiEventStatus::Success;
+        }
 
         track.AddEvent<MetaEvent>(track.m_TotalTicks, metaType, data, metaLength);
 
@@ -179,6 +182,12 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             // These have 2 bytes of data
             case MidiEventType::NoteOff:
             case MidiEventType::NoteOn:
+            {
+                ReadInteger(&event->m_DataB);
+                if (event->m_DataB == 0)
+                    event->m_MidiEventType = MidiEventType::NoteOff;
+                break;
+            }
             case MidiEventType::PolyAfter:
             case MidiEventType::ControlChange:
             case MidiEventType::PitchBend:
@@ -244,8 +253,8 @@ inline void MidiParser::ReadBytes(void* buffer, size_t size) {
     m_ReadPosition += size;
 }
 
-inline uint64_t MidiParser::TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
-    return ticks / (uint64_t)m_Division * tempo;
+inline float MidiParser::TicksToMicroseconds(uint32_t ticks, uint32_t tempo) {
+    return ticks / (float)m_Division * tempo;
 }
 
 inline uint32_t MidiParser::CalculateTempo(uint8_t* data, size_t size) {

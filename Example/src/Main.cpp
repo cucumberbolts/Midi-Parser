@@ -40,18 +40,23 @@ int main() {
         Timer timer;
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
+
 #if 0
     std::cout << std::hex;
     for (MidiTrack& track : *reader) {
         std::cout << "----------------------- New track -----------------------\n";
         for (int i = 0; i < track.GetEventCount(); i++) {
             if (track[i]->GetCategory() == EventCategory::Midi) {
-                std::string noteName = MidiUtilities::ConvertNote(*(MidiEvent*)track[i]);
+                MidiEvent& midiEvent = *(MidiEvent*)track[i];
+                std::string noteName = MidiUtilities::ConvertNote(midiEvent);
                 if (!noteName.empty())
-                    std::cout << noteName << " " << ((MidiEvent*)track[i])->GetDuration() << "\n";
+                    std::cout << noteName << " " << midiEvent.GetDuration() << "\n";
             } else if (track[i]->GetCategory() == EventCategory::Meta) {
-                for (int i = 0; i < ((MetaEvent*)track[i])->GetSize(); i++)
-                    std::cout << std::hex << (int)((MetaEvent*)track[i])->Data()[i] << "\n";
+                MetaEvent& metaEvent = *(MetaEvent*)track[i];
+                std::cout << "Meta event: ";
+                for (int i = 0; i < metaEvent.GetSize(); i++)
+                    std::cout << std::hex << (int)metaEvent[i] << " ";
+                std::cout << "\n";
             }
         }
     }

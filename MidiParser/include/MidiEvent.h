@@ -130,6 +130,8 @@ public:
     uint8_t Type() const override { return m_MetaType; }
     inline size_t GetSize() const { return m_Size; }
     inline uint8_t* Data() const { return m_Data; }
+
+    uint8_t operator[](size_t index) { return m_Data[index]; }
 protected:
     MetaEventType m_MetaType;
     uint8_t* m_Data = nullptr;
