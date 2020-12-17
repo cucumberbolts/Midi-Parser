@@ -7,7 +7,10 @@ MidiTrack::MidiTrack(size_t sizeBytes) : m_Capacity(sizeBytes) {
 }
 
 MidiTrack::~MidiTrack() {
-    delete[] m_Data;
+    for (int i = 0; i < m_Indicies.size(); i++)
+        ((Event*)&m_Data[m_Indicies[i]])->~Event();
+    ::operator delete(m_Data, m_Capacity);
+    //delete[] m_Data;
 }
 
 void MidiTrack::ReserveBytes(size_t sizeBytes) {

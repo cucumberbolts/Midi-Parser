@@ -90,20 +90,6 @@ public:
 
     virtual inline uint32_t GetTick() const { return m_Tick; }
     virtual inline EventCategory GetCategory() const { return m_Category; }
-#if 0
-    inline bool IsNoteOn() {
-        if (Type() == MidiEventType::NoteOn)
-            return ((MidiEvent*)this)->m_DataB > 0;
-    }
-
-    inline bool IsNoteOff() {
-        if (Type() == MidiEventType::NoteOff)
-            return true;
-        else if (Type() == MidiEventType::NoteOn)
-            return ((MidiEvent*)this)->m_DataB;
-        return false;
-    }
-#endif
 protected:
     uint32_t m_Tick;
     EventCategory m_Category;
@@ -142,12 +128,10 @@ class TempoEvent : public MetaEvent {
 public:
     friend class MidiParser;
 
-    TempoEvent(uint32_t tick, uint32_t tempo)
-        : MetaEvent(tick, MetaEventType::Tempo, nullptr, 0), m_Tempo(tempo) {}
+    TempoEvent(uint32_t tick, uint32_t tempo, uint8_t* data = nullptr, size_t size = 0)
+        : MetaEvent(tick, MetaEventType::Tempo, data, size), m_Tempo(tempo) {}
 
-    ~TempoEvent() override {
-        delete[] m_Data;
-    }
+    ~TempoEvent() override {}
 
     inline uint32_t GetTempo() const { return m_Tempo; }
     inline uint64_t GetTime() const { return m_Time; }

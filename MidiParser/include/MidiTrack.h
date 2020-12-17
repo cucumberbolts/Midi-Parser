@@ -8,7 +8,8 @@ class MidiTrack {
 public:
     MidiTrack() = default;
     MidiTrack(size_t sizeBytes);
-    ~MidiTrack();  // TODO: call meta event destructors
+
+    ~MidiTrack();
 
     void ReserveBytes(size_t sizeBytes);
     void ReserveEvents(size_t eventCount);

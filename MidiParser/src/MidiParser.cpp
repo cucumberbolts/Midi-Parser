@@ -97,14 +97,12 @@ bool MidiParser::ReadFile() {
             MidiEvent* noteOn = (MidiEvent*)track[i];
             MidiEvent* noteOff = noteOn;
 
-            for (int x = i + 1; x < track.GetEventCount(); x++) {
-                if (track[x]->Type() == MidiEventType::NoteOff) {
-                    if (((MidiEvent*)track[x])->m_DataA == noteOn->m_DataA) {
-                        noteOff = (MidiEvent*)track[x];
+            int x = i + 1;
+            for (; x < track.GetEventCount(); x++)
+                if (track[x]->Type() == MidiEventType::NoteOff)
+                    if (((MidiEvent*)track[x])->m_DataA == noteOn->m_DataA)
                         break;
-                    }
-                }
-            }
+            noteOff = (MidiEvent*)track[x];
 
             float start = (float)tempo->GetTime() + TicksToMicroseconds(noteOn->m_Tick - tempo->GetTick(), tempo->GetTempo());
             float end = (float)tempo->GetTime() + TicksToMicroseconds(noteOff->m_Tick - tempo->GetTick(), tempo->GetTempo());
@@ -121,7 +119,7 @@ bool MidiParser::ReadTrack() {
     VERIFY(ReadInteger<uint32_t>() == MTrk, "Invalid track: expected string \"MTrk\"");
 
     uint32_t size = ReadInteger<uint32_t>();  // Size of track chunk in bytes
-    MidiTrack& track = AddTrack(size);
+    MidiTrack& track = AddTrack(size * 8);  // 8 is a good number I guess
 
     // Reads each event in the track
     for (MidiEventStatus s = MidiEventStatus::Success; s == MidiEventStatus::Success; )
@@ -153,7 +151,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         ReadBytes(data, metaLength);
 
         if (metaType == MetaEventType::Tempo) {
-            track.AddEvent<TempoEvent>(track.m_TotalTicks, CalculateTempo(data, metaLength));
+            track.AddEvent<TempoEvent>(track.m_TotalTicks, CalculateTempo(data, metaLength), data, metaLength);
             m_TempoList.emplace_back(track.m_TotalTicks, CalculateTempo(data, metaLength));
             return MidiEventStatus::Success;
         }
@@ -248,8 +246,8 @@ inline T MidiParser::ReadInteger(T* destination) {
     return *destination;
 }
 
-inline void MidiParser::ReadBytes(void* buffer, size_t size) {
-    memcpy(buffer, m_Data.data() + m_ReadPosition, size);
+inline void MidiParser::ReadBytes(uint8_t* buffer, size_t size) {
+    std::copy(m_Data.data() + m_ReadPosition, m_Data.data() + m_ReadPosition + size, buffer);
     m_ReadPosition += size;
 }
 

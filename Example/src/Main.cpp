@@ -34,7 +34,36 @@ public:
     }
 };
 
+class A {
+protected:
+    int* m_Data = nullptr;
+public:
+    A() {
+        std::cout << "A constructed!\n";
+        m_Data = new int[10];
+    }
+
+    virtual ~A() {
+        std::cout << "A deleted!\n";
+        delete[] m_Data;
+    }
+};
+
+class B : public A {
+public:
+    B() {
+        std::cout << "B constructed!\n";
+        m_Data = new int[10];
+    }
+
+    ~B() override {
+        std::cout << "B deleted!\n";
+        //delete[] m_Data;   <-- this causes the same bug
+    }
+};
+
 int main() {
+#if 1
     std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
     {
         Timer timer;
@@ -67,4 +96,14 @@ int main() {
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";
+#else
+    A* a = new A();
+    delete a;
+    std::cout << "\n";
+    B* b = new B();
+    delete b;
+    std::cout << "\n";
+    A* x = new B();
+    delete x;
+#endif
 }
