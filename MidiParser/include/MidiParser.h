@@ -52,9 +52,9 @@ private:
     // Reads type T from file and converts to little endian if necessary
     template<typename T>
     inline T ReadInteger(T* destination = nullptr);
-    inline void ReadBytes(void* buffer, size_t size);
+    inline void ReadBytes(uint8_t* buffer, size_t size);
 
-    inline uint64_t TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
+    inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
 
     inline uint32_t CalculateTempo(uint8_t* data, size_t size);
 

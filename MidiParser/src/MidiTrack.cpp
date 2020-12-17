@@ -1,19 +1,34 @@
 #include "MidiTrack.h"
 
-#define MIDI_EVENT_SIZE 3  // The size of one MIDI event (in the file)
+#define MIDI_EVENT_SIZE 3  // The approximate size of one MIDI event (in the file)
 
-MidiTrack::MidiTrack(size_t sizeBytes) : m_SizeBytes(sizeBytes) {
+MidiTrack::MidiTrack(size_t sizeBytes) : m_Capacity(sizeBytes) {
     ReserveBytes(sizeBytes);
 }
 
-inline void MidiTrack::ReserveBytes(size_t sizeBytes) {
-    m_EventList.reserve(sizeBytes / MIDI_EVENT_SIZE);
+MidiTrack::~MidiTrack() {
+    for (int i = 0; i < m_Indicies.size(); i++)
+        ((Event*)&m_Data[m_Indicies[i]])->~Event();
+    ::operator delete(m_Data, m_Capacity);
 }
 
-inline void MidiTrack::ReserveEvents(size_t eventCount) {
-    m_EventList.reserve(eventCount);
+void MidiTrack::ReserveBytes(size_t sizeBytes) {
+    if (m_Data != nullptr) {  // Checks if m_Data has already been initialized
+        uint8_t* newData = new uint8_t[sizeBytes];
+
+        std::copy(m_Data, m_Data + m_Capacity, newData);
+        delete[] m_Data;
+
+        m_Capacity = sizeBytes;
+        m_Data = newData;
+    } else {
+        m_Capacity = sizeBytes;
+        m_Data = new uint8_t[sizeBytes];
+    }
+    m_Indicies.reserve(sizeBytes / MIDI_EVENT_SIZE);
 }
 
-MidiEvent& MidiTrack::AddEvent(uint32_t tick, MidiEventType type, uint8_t channel, uint8_t dataA, uint8_t dataB) {
-    return m_EventList.emplace_back(tick, type, channel, dataA, dataB);
+void MidiTrack::ReserveEvents(size_t eventCount) {
+    ReserveBytes(eventCount * MIDI_EVENT_SIZE);
+    m_Indicies.reserve(eventCount);
 }

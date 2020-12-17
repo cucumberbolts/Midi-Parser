@@ -21,13 +21,9 @@ private:
         "B"
     };
 public:
-    static std::string ConvertNote(MidiEvent event) {
-        // If event type is a note and velocity is greater than 0
-        if (event.Type() == MidiEventType::NoteOn && event.GetDataB() > 0) {
-            std::string note(notes[event.GetDataA() % 12]);
-            note.append(1, (char)(event.GetDataA() / 12 + ('0' - 1)));  // Append the octave number
-            return note;
-        }
-        return {};
+    static std::string NoteToString(NoteOnEvent* event) {
+        std::string note(notes[event->GetDataA() % 12]);
+        note.append(1, (char)(event->GetDataA() / 12 + ('0' - 1)));  // Append the octave number
+        return note;
     }
 };
