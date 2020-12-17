@@ -142,7 +142,6 @@ private:
 
 class MidiEvent : public Event {
 public:
-    friend class Event;
     friend class MidiParser;
 
     MidiEvent(uint32_t tick, MidiEventType type, uint8_t channel, uint8_t dataA, uint8_t dataB)
@@ -150,19 +149,29 @@ public:
 
     inline uint8_t Type() const override { return m_MidiEventType; }
 
-    inline MidiEventType GetMidiEventType() const { return m_MidiEventType; }
     inline uint8_t GetChannel() const { return m_Channel; }
     inline uint8_t GetDataA() const { return m_DataA; }
     inline uint8_t GetDataB() const { return m_DataB; }
-
-    inline float GetTimeStamp() const { return m_Start; }
-    inline float GetDuration() const { return m_Duration; }
 protected:
     MidiEventType m_MidiEventType;
     uint8_t m_Channel;
     uint8_t m_DataA;
     uint8_t m_DataB;
+};
 
+class NoteOnEvent : public MidiEvent {
+public:
+    friend class MidiParser;
+
+    NoteOnEvent(uint32_t tick, uint8_t channel, uint8_t noteNum, uint8_t velocity)
+        : MidiEvent(tick, MidiEventType::NoteOn, channel, noteNum, velocity) {}
+
+    inline uint8_t GetNote() const { return m_DataA; }
+    inline uint8_t GetNoteVelocity() const { return m_DataB; }
+
+    inline float GetTimeStamp() const { return m_Start; }
+    inline float GetDuration() const { return m_Duration; }
+private:
     float m_Start = 0.f;  // Time between beginning of track and beginning of note (seconds)
     float m_Duration = 0.f;  // Duration of note in (seconds)
 };

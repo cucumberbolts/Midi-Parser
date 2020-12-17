@@ -94,13 +94,13 @@ bool MidiParser::ReadFile() {
             if (track[i]->Type() != MidiEventType::NoteOn)
                 continue;
 
-            MidiEvent* noteOn = (MidiEvent*)track[i];
-            MidiEvent* noteOff = noteOn;
+            NoteOnEvent* noteOn = (NoteOnEvent*)track[i];
+            MidiEvent* noteOff = (MidiEvent*)noteOn;
 
             int x = i + 1;
             for (; x < track.GetEventCount(); x++)
                 if (track[x]->Type() == MidiEventType::NoteOff)
-                    if (((MidiEvent*)track[x])->m_DataA == noteOn->m_DataA)
+                    if (((NoteOnEvent*)track[x])->m_DataA == noteOn->m_DataA)
                         break;
             noteOff = (MidiEvent*)track[x];
 
@@ -164,7 +164,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
         ERROR("SysEx events not supported yet");
     } else {  // Midi event
-        uint8_t a;
+        uint8_t a, b;
         if (eventType < 0x80) {
             a = eventType;
             eventType = m_RunningStatus;
@@ -174,23 +174,26 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
         }
 
         uint8_t channel = eventType & 0x0f;
-        MidiEvent* event = track.AddEvent<MidiEvent>(track.m_TotalTicks, eventType, channel, a, 0);
 
         switch (eventType - channel) {
             // These have 2 bytes of data
             case MidiEventType::NoteOff:
             case MidiEventType::NoteOn:
             {
-                ReadInteger(&event->m_DataB);
-                if (event->m_DataB == 0)
-                    event->m_MidiEventType = MidiEventType::NoteOff;
-                break;
+                ReadInteger(&b);
+                if (b == 0) {
+                    eventType = MidiEventType::NoteOff;
+                    break;
+                } else {
+                    track.AddEvent<NoteOnEvent>(track.m_TotalTicks, channel, a, b);
+                    return MidiEventStatus::Success;
+                }
             }
             case MidiEventType::PolyAfter:
             case MidiEventType::ControlChange:
             case MidiEventType::PitchBend:
             {
-                ReadInteger(&event->m_DataB);
+                ReadInteger(&b);
                 break;
             }
             // These have 1 byte of data
@@ -207,6 +210,8 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
                 return MidiEventStatus::Error;
             }
         }
+
+        track.AddEvent<MidiEvent>(track.m_TotalTicks, eventType, channel, a, b);
 
         return MidiEventStatus::Success;
     }

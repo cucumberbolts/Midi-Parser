@@ -34,52 +34,22 @@ public:
     }
 };
 
-class A {
-protected:
-    int* m_Data = nullptr;
-public:
-    A() {
-        std::cout << "A constructed!\n";
-        m_Data = new int[10];
-    }
-
-    virtual ~A() {
-        std::cout << "A deleted!\n";
-        delete[] m_Data;
-    }
-};
-
-class B : public A {
-public:
-    B() {
-        std::cout << "B constructed!\n";
-        m_Data = new int[10];
-    }
-
-    ~B() override {
-        std::cout << "B deleted!\n";
-        //delete[] m_Data;   <-- this causes the same bug
-    }
-};
-
 int main() {
-#if 1
     std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
     {
         Timer timer;
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
 
-#if 0
     std::cout << std::hex;
     for (MidiTrack& track : *reader) {
         std::cout << "----------------------- New track -----------------------\n";
         for (int i = 0; i < track.GetEventCount(); i++) {
-            if (track[i]->GetCategory() == EventCategory::Midi) {
-                MidiEvent& midiEvent = *(MidiEvent*)track[i];
-                std::string noteName = MidiUtilities::ConvertNote(midiEvent);
+            if (track[i]->Type() == MidiEventType::NoteOn) {
+                NoteOnEvent* noteOn = (NoteOnEvent*)track[i];
+                std::string noteName = MidiUtilities::NoteToString(noteOn);
                 if (!noteName.empty())
-                    std::cout << noteName << " " << midiEvent.GetDuration() << "\n";
+                    std::cout << noteName << " " << noteOn->GetDuration() << "\n";
             } else if (track[i]->GetCategory() == EventCategory::Meta) {
                 MetaEvent& metaEvent = *(MetaEvent*)track[i];
                 std::cout << "Meta event: ";
@@ -90,20 +60,9 @@ int main() {
         }
     }
     std::cout << std::dec;
-#endif
 
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
     std::cout << s_AllocCount << " heap allocations\n";
-#else
-    A* a = new A();
-    delete a;
-    std::cout << "\n";
-    B* b = new B();
-    delete b;
-    std::cout << "\n";
-    A* x = new B();
-    delete x;
-#endif
 }
