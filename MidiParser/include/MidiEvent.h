@@ -1,6 +1,7 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstring>
+#include <cstdint>
 
 enum class EventCategory : uint8_t {
     Midi,
