@@ -36,20 +36,19 @@ public:
 
 int main() {
     std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
-    {
+    for (int i = 0; i < 100; i++) {
         Timer timer;
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
 
+#if 0
     std::cout << std::hex;
     for (MidiTrack& track : *reader) {
         std::cout << "----------------------- New track -----------------------\n";
         for (int i = 0; i < track.GetEventCount(); i++) {
-            if (track[i]->Type() == MidiEventType::NoteOn) {
+            if (track[i]->GetType() == MidiEventType::NoteOn) {
                 NoteOnEvent* noteOn = (NoteOnEvent*)track[i];
-                std::string noteName = MidiUtilities::NoteToString(noteOn);
-                if (!noteName.empty())
-                    std::cout << noteName << " " << noteOn->GetDuration() << "\n";
+                std::cout << MidiUtilities::NoteToString(noteOn) << " " << noteOn->GetDuration() << "\n";
             } else if (track[i]->GetCategory() == EventCategory::Meta) {
                 MetaEvent& metaEvent = *(MetaEvent*)track[i];
                 std::cout << "Meta event: ";
@@ -60,6 +59,7 @@ int main() {
         }
     }
     std::cout << std::dec;
+#endif
 
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";

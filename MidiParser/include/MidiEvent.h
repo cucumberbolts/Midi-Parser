@@ -9,6 +9,26 @@ enum class EventCategory : uint8_t {
     EndSysEx = 0xf7
 };
 
+enum MetaEventType : uint8_t {
+    SequenceNumber = 0x00,
+    Text = 0x01,
+    Copyright = 0x02,
+    TrackName = 0x03,
+    InstrumentName = 0x04,
+    Lyric = 0x05,
+    Marker = 0x06,
+    CuePoint = 0x07,
+    ProgramName = 0x08,
+    DeviceName = 0x09,
+    TrackComment = 0xf0,
+    PortChange = 0x21,
+    ChannelPrefix = 0x22,
+    EndOfTrack = 0x2f,
+    Tempo = 0x51,
+    TimeSignature = 0x58,
+    KeySignature = 0x59
+};
+
 enum MidiEventType : uint8_t {
     None = 0x00,
     NoteOff = 0x80,
@@ -60,39 +80,17 @@ enum ControlChange : uint8_t {
     AllNotesOff = 0x7b
 };
 
-enum MetaEventType : uint8_t {
-    SequenceNumber = 0x00,
-    Text = 0x01,
-    Copyright = 0x02,
-    TrackName = 0x03,
-    InstrumentName = 0x04,
-    Lyric = 0x05,
-    Marker = 0x06,
-    CuePoint = 0x07,
-    ProgramName = 0x08,
-    DeviceName = 0x09,
-    TrackComment = 0xf0,
-    PortChange = 0x21,
-    ChannelPrefix = 0x22,
-    EndOfTrack = 0x2f,
-    Tempo = 0x51,
-    TimeSignature = 0x58,
-    KeySignature = 0x59
-};
-
 class Event {
 public:
-    Event(uint32_t tick, EventCategory category)
-        : m_Tick(tick), m_Category(category) {}
+    Event(uint32_t tick) : m_Tick(tick) {}
     virtual ~Event() {}
 
-    virtual uint8_t Type() const = 0;
+    virtual inline uint8_t GetType() const = 0;
+    virtual inline EventCategory GetCategory() const = 0;
 
     virtual inline uint32_t GetTick() const { return m_Tick; }
-    virtual inline EventCategory GetCategory() const { return m_Category; }
 protected:
     uint32_t m_Tick;
-    EventCategory m_Category;
 };
 
 class MetaEvent : public Event {
@@ -100,10 +98,10 @@ public:
     friend class MidiParser;
 
     MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, size_t size)
-        : Event(tick, EventCategory::Meta), m_MetaType(metaType), m_Data(data), m_Size(size) {}
+        : Event(tick), m_MetaType(metaType), m_Data(data), m_Size(size) {}
 
     MetaEvent(MetaEvent& other)
-        : Event(other.m_Tick, EventCategory::Meta), m_MetaType(other.m_MetaType), m_Size(other.m_Size) {
+        : Event(other.m_Tick), m_MetaType(other.m_MetaType), m_Size(other.m_Size) {
     
         m_Data = new uint8_t[m_Size];
         std::copy(other.m_Data, other.m_Data + other.m_Size, m_Data);
@@ -113,7 +111,9 @@ public:
         delete[] m_Data;
     }
 
-    uint8_t Type() const override { return m_MetaType; }
+    inline uint8_t GetType() const override { return m_MetaType; }
+    inline EventCategory GetCategory() const { return EventCategory::Meta; }
+
     inline size_t GetSize() const { return m_Size; }
     inline uint8_t* Data() const { return m_Data; }
 
@@ -145,9 +145,10 @@ public:
     friend class MidiParser;
 
     MidiEvent(uint32_t tick, MidiEventType type, uint8_t channel, uint8_t dataA, uint8_t dataB)
-        : Event(tick, EventCategory::Midi), m_MidiEventType(type), m_Channel(channel), m_DataA(dataA), m_DataB(dataB) {}
+        : Event(tick), m_MidiEventType(type), m_Channel(channel), m_DataA(dataA), m_DataB(dataB) {}
 
-    inline uint8_t Type() const override { return m_MidiEventType; }
+    inline uint8_t GetType() const override { return m_MidiEventType; }
+    inline EventCategory GetCategory() const { return EventCategory::Midi; }
 
     inline uint8_t GetChannel() const { return m_Channel; }
     inline uint8_t GetDataA() const { return m_DataA; }

@@ -42,7 +42,7 @@ private:
 private:
     bool ReadFile();
     bool ReadTrack();
-    MidiEventStatus ReadEvent(MidiTrack& track);  // Reads a single event
+    MidiEventStatus ReadEvent(MidiTrack& track, MidiEventType& runningStatus);  // Reads a single event
 
     inline MidiTrack& AddTrack() { return m_TrackList.emplace_back(); }
     inline MidiTrack& AddTrack(size_t sizeBytes) { return m_TrackList.emplace_back(sizeBytes); }
@@ -52,7 +52,7 @@ private:
     // Reads type T from file and converts to little endian if necessary
     template<typename T>
     inline T ReadInteger(T* destination = nullptr);
-    inline void ReadBytes(uint8_t* buffer, size_t size);
+    inline void ReadBytes(uint8_t* buffer, size_t size);  // Copies memory from m_Data to buffer
 
     inline float TicksToMicroseconds(uint32_t ticks, uint32_t tempo);
 
@@ -67,10 +67,9 @@ private:
     std::vector<MidiTrack> m_TrackList;
 
     uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;
+
     uint32_t m_TotalTicks = 0;  // Duration of MIDI file in ticks
     uint64_t m_Duration = 0;  // Duration of MIDI file in microseconds
-
-    MidiEventType m_RunningStatus = MidiEventType::None;  // Current running status
 
     bool m_ErrorStatus = true;  // True if no error
 };

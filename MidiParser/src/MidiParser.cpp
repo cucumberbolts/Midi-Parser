@@ -41,6 +41,8 @@ bool MidiParser::Open(const std::string& file) {
 
     ReadFile();
 
+    m_Data.clear();
+
     return m_ErrorStatus;
 }
 
@@ -88,18 +90,18 @@ bool MidiParser::ReadFile() {
 
     for (MidiTrack& track : m_TrackList) {
         for (int i = 0; i < track.GetEventCount(); i++) {
-            if (track[i]->Type() == MetaEventType::Tempo)
+            if (track[i]->GetType() == MetaEventType::Tempo)
                 tempo = (TempoEvent*)track[i];
 
-            if (track[i]->Type() != MidiEventType::NoteOn)
+            if (track[i]->GetType() != MidiEventType::NoteOn)
                 continue;
 
             NoteOnEvent* noteOn = (NoteOnEvent*)track[i];
-            MidiEvent* noteOff = (MidiEvent*)noteOn;
+            MidiEvent* noteOff = noteOn;
 
             int x = i + 1;
             for (; x < track.GetEventCount(); x++)
-                if (track[x]->Type() == MidiEventType::NoteOff)
+                if (track[x]->GetType() == MidiEventType::NoteOff)
                     if (((NoteOnEvent*)track[x])->m_DataA == noteOn->m_DataA)
                         break;
             noteOff = (MidiEvent*)track[x];
@@ -121,9 +123,11 @@ bool MidiParser::ReadTrack() {
     uint32_t size = ReadInteger<uint32_t>();  // Size of track chunk in bytes
     MidiTrack& track = AddTrack(size * 8);  // 8 is a good number I guess
 
+    MidiEventType runningStatus = MidiEventType::None;
+
     // Reads each event in the track
     for (MidiEventStatus s = MidiEventStatus::Success; s == MidiEventStatus::Success; )
-        s = ReadEvent(track);
+        s = ReadEvent(track, runningStatus);
 
     // Sets the duration of the MIDI file in ticks
     if (track.m_TotalTicks > m_TotalTicks)
@@ -132,14 +136,14 @@ bool MidiParser::ReadTrack() {
     return m_ErrorStatus;
 }
 
-MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
+MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track, MidiEventType& runningStatus) {
     uint32_t deltaTime = ReadVariableLengthValue();  // Ticks since last event
     MidiEventType eventType = (MidiEventType)ReadInteger<uint8_t>();
     EventCategory eventCategory = eventType >= 0xf0 ? (EventCategory)eventType : EventCategory::Midi;
     track.m_TotalTicks += deltaTime;
 
     if (eventCategory == EventCategory::Meta) {  // Meta event
-        m_RunningStatus = MidiEventType::None;
+        runningStatus = MidiEventType::None;
 
         MetaEventType metaType = (MetaEventType)ReadInteger<uint8_t>();
         int32_t metaLength = ReadVariableLengthValue();
@@ -152,7 +156,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
         if (metaType == MetaEventType::Tempo) {
             track.AddEvent<TempoEvent>(track.m_TotalTicks, CalculateTempo(data, metaLength), data, metaLength);
-            m_TempoList.emplace_back(track.m_TotalTicks, CalculateTempo(data, metaLength));
+            m_TempoList.emplace_back(track.m_TotalTicks, CalculateTempo(data, metaLength), nullptr, 0);
             return MidiEventStatus::Success;
         }
 
@@ -160,16 +164,16 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
         return MidiEventStatus::Success;
     } else if (eventCategory == EventCategory::SysEx) {  // Ignore SysEx events
-        m_RunningStatus = MidiEventType::None;
+        runningStatus = MidiEventType::None;
 
         ERROR("SysEx events not supported yet");
     } else {  // Midi event
         uint8_t a, b;
         if (eventType < 0x80) {
             a = eventType;
-            eventType = m_RunningStatus;
+            eventType = runningStatus;
         } else {
-            m_RunningStatus = eventType;
+            runningStatus = eventType;
             ReadInteger(&a);
         }
 
@@ -177,7 +181,6 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
 
         switch (eventType - channel) {
             // These have 2 bytes of data
-            case MidiEventType::NoteOff:
             case MidiEventType::NoteOn:
             {
                 ReadInteger(&b);
@@ -189,6 +192,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
                     return MidiEventStatus::Success;
                 }
             }
+            case MidiEventType::NoteOff:
             case MidiEventType::PolyAfter:
             case MidiEventType::ControlChange:
             case MidiEventType::PitchBend:
@@ -205,7 +209,7 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track) {
             default:
             {
                 std::ostringstream ss;
-                ss << "Unrecognized event type: " << std::hex << (int)eventType;
+                ss << "Unrecognized event type: " << std::hex << "0x" << (int)eventType;
                 ERROR(ss.str());
                 return MidiEventStatus::Error;
             }
@@ -266,7 +270,7 @@ inline uint32_t MidiParser::CalculateTempo(uint8_t* data, size_t size) {
     if constexpr (Endian::Little)
         return Endian::FlipEndian(*(uint32_t*)data) >> 8;
     else
-        return *(uint32_t*)data >> 8;
+        return *(uint32_t*)data << 8;
 }
 
 void MidiParser::Error(const std::string& msg) {
