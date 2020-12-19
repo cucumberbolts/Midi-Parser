@@ -155,8 +155,8 @@ MidiParser::MidiEventStatus MidiParser::ReadEvent(MidiTrack& track, MidiEventTyp
         ReadBytes(data, metaLength);
 
         if (metaType == MetaEventType::Tempo) {
-            track.AddEvent<TempoEvent>(track.m_TotalTicks, CalculateTempo(data, metaLength), data, metaLength);
-            m_TempoList.emplace_back(track.m_TotalTicks, CalculateTempo(data, metaLength), nullptr, 0);
+            track.AddEvent<TempoEvent>(track.m_TotalTicks, CalculateTempo(data, metaLength), data);
+            m_TempoList.emplace_back(track.m_TotalTicks, CalculateTempo(data, metaLength));
             return MidiEventStatus::Success;
         }
 

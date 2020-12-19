@@ -8,8 +8,13 @@ class MidiTrack {
 public:
     MidiTrack() = default;
     MidiTrack(size_t sizeBytes);
+    MidiTrack(const MidiTrack& other);
+    MidiTrack(MidiTrack&& other) noexcept;
 
     ~MidiTrack();
+
+    MidiTrack& operator=(const MidiTrack& other);
+    MidiTrack& operator=(MidiTrack&& other) noexcept;
 
     void ReserveBytes(size_t sizeBytes);
     void ReserveEvents(size_t eventCount);

@@ -36,7 +36,7 @@ public:
 
 int main() {
     std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
-    for (int i = 0; i < 100; i++) {
+    {
         Timer timer;
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
@@ -64,5 +64,5 @@ int main() {
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
 
-    std::cout << s_AllocCount << " heap allocations\n";
+    std::cout << s_AllocCount << " allocations\n";
 }

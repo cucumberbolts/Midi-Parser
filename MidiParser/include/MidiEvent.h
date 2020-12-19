@@ -100,19 +100,55 @@ public:
     MetaEvent(uint32_t tick, MetaEventType metaType, uint8_t* data, size_t size)
         : Event(tick), m_MetaType(metaType), m_Data(data), m_Size(size) {}
 
-    MetaEvent(MetaEvent& other)
+    MetaEvent(const MetaEvent& other)
         : Event(other.m_Tick), m_MetaType(other.m_MetaType), m_Size(other.m_Size) {
     
         m_Data = new uint8_t[m_Size];
         std::copy(other.m_Data, other.m_Data + other.m_Size, m_Data);
     }
 
+    MetaEvent(MetaEvent&& other) noexcept
+        : Event(other.m_Tick), m_MetaType(other.m_MetaType), m_Data(other.m_Data), m_Size(other.m_Size) {
+        
+        other.m_Size = 0;
+        other.m_Data = nullptr;
+    }
+
     virtual ~MetaEvent() override {
         delete[] m_Data;
     }
 
+    MetaEvent& operator=(const MetaEvent& other) {
+        if (&other != this) {
+            if (m_Size != other.m_Size) {
+                m_Size = other.m_Size;
+
+                delete[] m_Data;
+                m_Data = new uint8_t[m_Size];
+            }
+
+            std::copy(other.m_Data, other.m_Data + other.m_Size, m_Data);
+        }
+
+        return *this;
+    }
+
+    MetaEvent& operator=(MetaEvent&& other) noexcept {
+        if (&other != this) {
+            delete[] m_Data;
+
+            m_Size = other.m_Size;
+            m_Data = other.m_Data;
+
+            other.m_Size = 0;
+            other.m_Data = nullptr;
+        }
+
+        return *this;
+    }
+
     inline uint8_t GetType() const override { return m_MetaType; }
-    inline EventCategory GetCategory() const { return EventCategory::Meta; }
+    inline EventCategory GetCategory() const override { return EventCategory::Meta; }
 
     inline size_t GetSize() const { return m_Size; }
     inline uint8_t* Data() const { return m_Data; }
@@ -128,10 +164,51 @@ class TempoEvent : public MetaEvent {
 public:
     friend class MidiParser;
 
-    TempoEvent(uint32_t tick, uint32_t tempo, uint8_t* data = nullptr, size_t size = 0)
-        : MetaEvent(tick, MetaEventType::Tempo, data, size), m_Tempo(tempo) {}
+    TempoEvent(uint32_t tick, uint32_t tempo, uint8_t* data = nullptr)
+        : MetaEvent(tick, MetaEventType::Tempo, data, 3), m_Tempo(tempo) {
 
-    ~TempoEvent() override {}
+        if (data == nullptr)
+            m_Size = 0;
+    }
+
+    TempoEvent(const TempoEvent& other) 
+        : MetaEvent(other.m_Tick, MetaEventType::Tempo, nullptr, other.m_Size), m_Tempo(other.m_Tempo) {
+        
+        m_Data = new uint8_t[m_Size];
+        std::copy(other.m_Data, other.m_Data + other.m_Size, m_Data);
+    }
+
+    TempoEvent(TempoEvent&& other) noexcept
+        : MetaEvent(other.m_Tick, other.m_MetaType, other.m_Data, other.m_Size) {
+
+        other.m_Size = 0;
+        other.m_Data = nullptr;
+    }
+
+    ~TempoEvent() override = default;
+
+    TempoEvent& operator=(const TempoEvent& other) {
+        if (&other != this) {
+            std::copy(other.m_Data, other.m_Data + other.m_Size, m_Data);
+            m_Size = other.m_Size;
+        }
+
+        return *this;
+    }
+
+    TempoEvent& operator=(TempoEvent&& other) noexcept {
+        if (&other != this) {
+            delete[] m_Data;
+
+            m_Size = other.m_Size;
+            m_Data = other.m_Data;
+
+            other.m_Size = 0;
+            other.m_Data = nullptr;
+        }
+
+        return *this;
+    }
 
     inline uint32_t GetTempo() const { return m_Tempo; }
     inline uint64_t GetTime() const { return m_Time; }
@@ -148,7 +225,7 @@ public:
         : Event(tick), m_MidiEventType(type), m_Channel(channel), m_DataA(dataA), m_DataB(dataB) {}
 
     inline uint8_t GetType() const override { return m_MidiEventType; }
-    inline EventCategory GetCategory() const { return EventCategory::Midi; }
+    inline EventCategory GetCategory() const override { return EventCategory::Midi; }
 
     inline uint8_t GetChannel() const { return m_Channel; }
     inline uint8_t GetDataA() const { return m_DataA; }
