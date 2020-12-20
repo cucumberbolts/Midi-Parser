@@ -11,6 +11,7 @@ class MidiParser {
 public:
     MidiParser() = default;
     MidiParser(const std::string& file);
+    MidiParser(const MidiParser& other) = default;
 
     ~MidiParser() = default;
 
@@ -63,7 +64,7 @@ private:
     std::vector<uint8_t> m_Data;
     size_t m_ReadPosition = 0;
 
-    std::vector<TempoEvent> m_TempoList;
+    std::vector<TempoEvent*> m_TempoList;
     std::vector<MidiTrack> m_TrackList;
 
     uint16_t m_Format = 0, m_TrackCount = 0, m_Division = 0;

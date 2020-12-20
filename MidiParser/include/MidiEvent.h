@@ -179,10 +179,13 @@ public:
     }
 
     TempoEvent(TempoEvent&& other) noexcept
-        : MetaEvent(other.m_Tick, other.m_MetaType, other.m_Data, other.m_Size) {
+        : MetaEvent(other.m_Tick, other.m_MetaType, other.m_Data, other.m_Size), m_Time(other.m_Time), m_Tempo(other.m_Tempo) {
 
         other.m_Size = 0;
         other.m_Data = nullptr;
+
+        other.m_Time = 0;
+        other.m_Tempo = 0;
     }
 
     ~TempoEvent() override = default;
@@ -203,8 +206,14 @@ public:
             m_Size = other.m_Size;
             m_Data = other.m_Data;
 
+            m_Time = other.m_Time;
+            m_Tempo = other.m_Tempo;
+
             other.m_Size = 0;
             other.m_Data = nullptr;
+
+            other.m_Time = 0;
+            other.m_Tempo = 0;
         }
 
         return *this;

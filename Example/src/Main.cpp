@@ -34,16 +34,9 @@ public:
     }
 };
 
-int main() {
-    std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
-    {
-        Timer timer;
-        reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
-    }
-
-#if 0
+void PrintMidiEvents(std::unique_ptr<MidiParser>& parser) {
     std::cout << std::hex;
-    for (MidiTrack& track : *reader) {
+    for (MidiTrack& track : *parser) {
         std::cout << "----------------------- New track -----------------------\n";
         for (int i = 0; i < track.GetEventCount(); i++) {
             if (track[i]->GetType() == MidiEventType::NoteOn) {
@@ -59,6 +52,17 @@ int main() {
         }
     }
     std::cout << std::dec;
+}
+
+int main() {
+    std::unique_ptr<MidiParser> reader = std::make_unique<MidiParser>();
+    for (int i = 0; i < 100; i++) {
+        Timer timer;
+        reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
+    }
+
+#if 0
+    PrintMidiEvents(reader);
 #endif
 
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
