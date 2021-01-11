@@ -21,9 +21,12 @@ private:
         "B"
     };
 public:
-    static std::string NoteToString(NoteOnEvent* event) {
-        std::string note(notes[event->GetDataA() % 12]);
-        note.append(1, (char)(event->GetDataA() / 12 + ('0' - 1)));  // Append the octave number
-        return note;
+    static std::string NoteToString(MidiEvent* event) {
+        if (event->GetType() == MidiEventType::NoteOn) {
+            std::string note(notes[event->GetDataA() % 12]);
+            note.append(1, (char)(event->GetDataA() / 12 + ('0' - 1)));  // Append the octave number
+            return note;
+        }
+        return "";
     }
 };

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <stdint.h>
-#include <type_traits>
+#include <cstdint>
 
 class Endian {
 private:
@@ -15,20 +14,13 @@ public:
 
     static_assert(Little || Big, "Cannot determine endianness");
 
-    template <typename T>
-    static T FlipEndian(T number) {
-        static_assert(std::is_integral<T>(), "Type T is not an integer");
+    static inline uint16_t FlipEndian(uint16_t number) {
+        uint8_t* source = reinterpret_cast<uint8_t*>(&number);
+        return source[1] | source[0] << 8;
+    }
 
-        if constexpr (sizeof(T) > 1) {
-            T destination = 0;
-            uint8_t* source = reinterpret_cast<uint8_t*>(&number);
-
-            for (int i = 0; i < sizeof(T); i++)
-                destination += source[sizeof(T) - 1 - i] << (i * 8);
-
-            return destination;
-        } else {
-            return number;
-        }
+    static inline uint32_t FlipEndian(uint32_t number) {
+        uint8_t* source = reinterpret_cast<uint8_t*>(&number);
+        return source[3] | source[2] << 8 | source[1] << 16 | source[0] << 24;
     }
 };

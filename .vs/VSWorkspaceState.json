@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\Example",
+    "\\Example\\src",
+    "\\MidiParser",
+    "\\MidiParser\\src"
+  ],
+  "SelectedNode": "\\Example\\CMakeLists.txt",
+  "PreviewInSolutionExplorer": false
+}

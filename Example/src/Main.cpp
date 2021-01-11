@@ -16,9 +16,7 @@ private:
     std::chrono::high_resolution_clock::time_point m_Start;
     std::chrono::high_resolution_clock::time_point m_Stop;
 public:
-    Timer() {
-        m_Start = std::chrono::high_resolution_clock::now();
-    }
+    Timer() : m_Start(std::chrono::high_resolution_clock::now()) {}
 
     ~Timer() {
         Stop();
@@ -40,13 +38,12 @@ void PrintMidiEvents(std::unique_ptr<MidiParser>& parser) {
         std::cout << "----------------------- New track -----------------------\n";
         for (int i = 0; i < track.GetEventCount(); i++) {
             if (track[i]->GetType() == MidiEventType::NoteOn) {
-                NoteOnEvent* noteOn = (NoteOnEvent*)track[i];
-                std::cout << MidiUtilities::NoteToString(noteOn) << " " << noteOn->GetDuration() << "\n";
+                std::cout << MidiUtilities::NoteToString((MidiEvent*)track[i]) << "\n";
             } else if (track[i]->GetCategory() == EventCategory::Meta) {
-                MetaEvent& metaEvent = *(MetaEvent*)track[i];
+                MetaEvent& metaEvent = *reinterpret_cast<MetaEvent*>(track[i]);
                 std::cout << "Meta event: ";
-                for (int i = 0; i < metaEvent.GetSize(); i++)
-                    std::cout << std::hex << (int)metaEvent[i] << " ";
+                for (int j = 0; j < metaEvent.GetSize(); j++)
+                    std::cout << std::hex << (int)metaEvent[j] << " ";
                 std::cout << "\n";
             }
         }
@@ -61,9 +58,7 @@ int main() {
         reader->Open("../../Example/assets/Type1/SpanishFlea.mid");
     }
 
-#if 0
     PrintMidiEvents(reader);
-#endif
 
     auto [minutes, seconds] = reader->GetDurationMinutesAndSeconds();
     std::cout << "MIDI duration: " << minutes << " minutes and " << seconds << " seconds\n";
