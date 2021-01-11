@@ -49,19 +49,6 @@ std::pair<uint32_t, uint32_t> MidiParser::GetDurationMinutesAndSeconds() {
 }
 
 bool MidiParser::ReadFile() {
-    if (!ReadHeader())
-        return false;
-
-    m_TrackList.reserve(m_TrackCount);  // Reserves memory
-
-    // This parses the tracks
-    for (int i = 0; i < m_TrackCount; i++)
-        ReadTrack();
-
-    return m_ErrorStatus;
-}
-
-bool MidiParser::ReadHeader() {
     uint32_t mthd = ReadInteger();
     uint32_t headerSize = ReadInteger();
     m_Format = ReadShort();
@@ -75,6 +62,18 @@ bool MidiParser::ReadHeader() {
 
     VERIFY(!(m_Division & 0x8000), "Division mode not supported");  // Checks if the left-most bit is not 1
     VERIFY(m_Format != 2, "Type 2 MIDI format not supported");
+
+    return m_ErrorStatus;
+
+    if (!m_ErrorStatus)
+        return false;
+
+    m_TrackList.reserve(m_TrackCount);  // Reserves memory
+
+    // This parses the tracks
+    for (int i = 0; i < m_TrackCount; i++)
+        if (!ReadTrack())
+            break;
 
     return m_ErrorStatus;
 }

@@ -43,7 +43,6 @@ private:
     };
 private:
     bool ReadFile();
-    bool ReadHeader();
     bool ReadTrack();
     MidiEventStatus ReadEvent(MidiTrack& track, MidiEventType& runningStatus);  // Reads a single event
 
